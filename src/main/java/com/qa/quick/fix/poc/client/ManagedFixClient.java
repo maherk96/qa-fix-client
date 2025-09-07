@@ -73,13 +73,6 @@ public class ManagedFixClient implements Application {
         this.sessionEventListener = sessionEventListener;
     }
 
-    // Add this method to your ManagedFixClient class
-    public boolean isFullyConnected() {
-        boolean tradeOk = tradeSessionId == null || tradeSessionConnected.get();
-        boolean quoteOk = quoteSessionId == null || quoteSessionConnected.get();
-        return tradeOk && quoteOk;
-    }
-
     public void start() throws ConfigError {
         logger.info("Starting client: {}", clientStreamName);
         
@@ -375,6 +368,33 @@ public class ManagedFixClient implements Application {
         dict.setString("FileLogPath", basePath + "_logs");
 
         return dict;
+    }
+
+    public boolean isFullyConnected() {
+        // Check trade session: if configured, it must be connected
+        if (isTradeSessionConfigured()) {
+            if (!isTradeSessionConnected()) {
+                return false;
+            }
+        }
+
+        // Check quote session: if configured, it must be connected
+        if (isQuoteSessionConfigured()) {
+            if (!isQuoteSessionConnected()) {
+                return false;
+            }
+        }
+
+        // Must have at least one configured session
+        return isTradeSessionConfigured() || isQuoteSessionConfigured();
+    }
+
+    private boolean isTradeSessionConfigured() {
+        return clientDefinition.getTradeSession() != null && connectionEnvironment.getTrade() != null;
+    }
+
+    private boolean isQuoteSessionConfigured() {
+        return clientDefinition.getQuoteSession() != null && connectionEnvironment.getQuote() != null;
     }
 
     // Helper method to safely set values
