@@ -14,9 +14,10 @@ import java.util.function.BiConsumer;
 /**
  * Maps FIX tags to QuickFIX/J fields using a registry pattern
  */
-public class FixFieldMapper {
+public class FixFieldMapper implements IFixFieldMapper {
     
     private static final Logger logger = LoggerFactory.getLogger(FixFieldMapper.class);
+    private static final DateTimeFormatter FIX_DATE_TIME = DateTimeFormatter.ofPattern("yyyyMMdd-HH:mm:ss.SSS");
     
     private final Map<String, BiConsumer<Message, Object>> fieldMappers;
 
@@ -49,6 +50,7 @@ public class FixFieldMapper {
     /**
      * Register a new field mapper
      */
+    @Override
     public void registerField(String tag, BiConsumer<Message, Object> mapper) {
         fieldMappers.put(tag, mapper);
         logger.debug("Registered field mapper for tag: {}", tag);
@@ -57,6 +59,7 @@ public class FixFieldMapper {
     /**
      * Set a field on a FIX message
      */
+    @Override
     public void setField(Message message, String tag, Object value) {
         if (value == null) {
             logger.debug("Skipping null value for tag: {}", tag);
@@ -82,6 +85,7 @@ public class FixFieldMapper {
     /**
      * Set all fields from a map
      */
+    @Override
     public void setAllFields(Message message, Map<String, Object> fields) {
         fields.forEach((tag, value) -> setField(message, tag, value));
     }
@@ -200,8 +204,7 @@ public class FixFieldMapper {
             } catch (Exception e) {
                 // Try FIX format: yyyyMMdd-HH:mm:ss.SSS
                 try {
-                    DateTimeFormatter fixFormatter = DateTimeFormatter.ofPattern("yyyyMMdd-HH:mm:ss.SSS");
-                    return LocalDateTime.parse(str, fixFormatter);
+                    return LocalDateTime.parse(str, FIX_DATE_TIME);
                 } catch (Exception e2) {
                     logger.warn("Cannot parse datetime '{}', using current time", str);
                     return LocalDateTime.now();
@@ -217,12 +220,13 @@ public class FixFieldMapper {
      * Get all registered field tags
      */
     public java.util.Set<String> getRegisteredTags() {
-        return fieldMappers.keySet();
+        return java.util.Collections.unmodifiableSet(fieldMappers.keySet());
     }
 
     /**
      * Check if a tag has a registered mapper
      */
+    @Override
     public boolean hasMapper(String tag) {
         return fieldMappers.containsKey(tag);
     }

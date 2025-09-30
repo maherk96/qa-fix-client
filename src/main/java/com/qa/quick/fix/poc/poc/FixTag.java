@@ -18,6 +18,7 @@ public enum FixTag {
     EXEC_TYPE("150");
 
     private final String tag;
+    private static final java.util.Map<String, FixTag> LOOKUP;
 
     FixTag(String tag) {
         this.tag = tag;
@@ -36,13 +37,19 @@ public enum FixTag {
      * Find FixTag by tag string
      */
     public static FixTag fromTag(String tag) {
-        for (FixTag fixTag : values()) {
-            if (fixTag.tag.equals(tag)) {
-                return fixTag;
-            }
+        return LOOKUP.get(tag);
+    }
+
+    public static java.util.Optional<FixTag> findByTag(String tag) {
+        return java.util.Optional.ofNullable(LOOKUP.get(tag));
+    }
+
+    static {
+        java.util.Map<String, FixTag> map = new java.util.HashMap<>();
+        for (FixTag t : values()) {
+            map.put(t.tag, t);
         }
-        return null;
+        LOOKUP = java.util.Collections.unmodifiableMap(map);
     }
 }
-
 

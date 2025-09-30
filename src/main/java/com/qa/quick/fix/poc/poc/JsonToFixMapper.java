@@ -2,9 +2,8 @@ package com.qa.quick.fix.poc.poc;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import quickfix.Message;
-import quickfix.fix44.ExecutionReport;
-import quickfix.fix44.NewOrderSingle;
 
 import java.util.Map;
 import java.util.Random;
@@ -17,8 +16,9 @@ public class JsonToFixMapper {
     
     private static final Logger logger = LoggerFactory.getLogger(JsonToFixMapper.class);
     
-    private final TemplateResolver templateResolver;
-    private final FixFieldMapper fixFieldMapper;
+    private final ITemplateResolver templateResolver;
+    private final IFixFieldMapper fixFieldMapper;
+    private final FixMessageFactory messageFactory;
 
     /**
      * Default constructor for production use
@@ -26,6 +26,7 @@ public class JsonToFixMapper {
     public JsonToFixMapper() {
         this.templateResolver = new TemplateResolver();
         this.fixFieldMapper = new FixFieldMapper();
+        this.messageFactory = new DefaultFixMessageFactory();
         logger.debug("JsonToFixMapper initialized with default components");
     }
 
@@ -35,19 +36,41 @@ public class JsonToFixMapper {
     public JsonToFixMapper(Random random) {
         this.templateResolver = new TemplateResolver(random);
         this.fixFieldMapper = new FixFieldMapper();
+        this.messageFactory = new DefaultFixMessageFactory();
         logger.debug("JsonToFixMapper initialized with custom Random for testing");
+    }
+
+    /**
+     * Fully injectable constructor for testability and extension.
+     */
+    public JsonToFixMapper(ITemplateResolver templateResolver, IFixFieldMapper fixFieldMapper, FixMessageFactory messageFactory) {
+        this.templateResolver = templateResolver;
+        this.fixFieldMapper = fixFieldMapper;
+        this.messageFactory = messageFactory;
+        logger.debug("JsonToFixMapper initialized with injected components");
     }
 
     /**
      * Create FIX message from Request using GlobalConfig for variable resolution
      */
     public Message createFixMessage(FixLoadTaskDefinition.Request request, FixLoadTaskDefinition.GlobalConfig globalConfig) {
+        return createFixMessage(request, globalConfig, null);
+    }
+
+    /**
+     * Create FIX message with optional correlationId added to MDC for traceability.
+     */
+    public Message createFixMessage(FixLoadTaskDefinition.Request request, FixLoadTaskDefinition.GlobalConfig globalConfig, String correlationId) {
         if (request == null) {
             throw new IllegalArgumentException("Request cannot be null");
         }
         
         if (request.getMessageType() == null) {
             throw new IllegalArgumentException("Message type cannot be null");
+        }
+
+        if (correlationId != null && !correlationId.isEmpty()) {
+            MDC.put("corrId", correlationId);
         }
 
         logger.debug("Creating FIX message of type: {}", request.getMessageType());
@@ -59,7 +82,7 @@ public class JsonToFixMapper {
         }
 
         // Create the appropriate message type
-        Message message = createMessageByType(request.getMessageType());
+        Message message = messageFactory.create(request.getMessageType());
         
         // Resolve templates and set fields
         if (request.getFields() != null && !request.getFields().isEmpty()) {
@@ -72,22 +95,12 @@ public class JsonToFixMapper {
             logger.warn("No fields specified for message type: {}", request.getMessageType());
         }
 
-        return message;
-    }
-
-    /**
-     * Create message instance based on message type
-     */
-    private Message createMessageByType(FixMessageType messageType) {
-        switch (messageType) {
-            case NEW_ORDER_SINGLE:
-                return new NewOrderSingle();
-            
-            case EXECUTION_REPORT:
-                return new ExecutionReport();
-            
-            default:
-                throw new IllegalArgumentException("Unsupported message type: " + messageType);
+        try {
+            return message;
+        } finally {
+            if (correlationId != null) {
+                MDC.remove("corrId");
+            }
         }
     }
 

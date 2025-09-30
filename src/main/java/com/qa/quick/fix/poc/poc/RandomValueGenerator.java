@@ -13,7 +13,7 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * Handles generation of random values for FIX message fields
  */
-public class RandomValueGenerator {
+public class RandomValueGenerator implements IRandomValueGenerator {
     
     private static final Logger logger = LoggerFactory.getLogger(RandomValueGenerator.class);
     
@@ -37,6 +37,7 @@ public class RandomValueGenerator {
      * Get random item from a list variable
      */
     @SuppressWarnings("unchecked")
+    @Override
     public String randomFrom(String varName, Map<String, Object> vars, String defaultValue) {
         if (vars == null) {
             logger.warn("Variables map is null, using default value: {}", defaultValue);
@@ -72,6 +73,7 @@ public class RandomValueGenerator {
     /**
      * Generate random price from a range variable
      */
+    @Override
     public BigDecimal randomPrice(String varName, Map<String, Object> vars, BigDecimal defaultValue) {
         return randomDecimal(varName, vars, defaultValue, 2);
     }
@@ -79,6 +81,7 @@ public class RandomValueGenerator {
     /**
      * Generate random quantity from a range variable
      */
+    @Override
     public BigDecimal randomQuantity(String varName, Map<String, Object> vars, BigDecimal defaultValue) {
         return randomDecimal(varName, vars, defaultValue, 0);
     }
@@ -86,6 +89,7 @@ public class RandomValueGenerator {
     /**
      * Generate random integer from a range variable
      */
+    @Override
     public int randomInt(String varName, Map<String, Object> vars, Integer defaultValue) {
         BigDecimal result = randomDecimal(varName, vars, 
             defaultValue != null ? BigDecimal.valueOf(defaultValue) : BigDecimal.ONE, 0);

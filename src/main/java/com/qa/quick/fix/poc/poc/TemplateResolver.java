@@ -14,14 +14,14 @@ import java.util.regex.Pattern;
 /**
  * Resolves template expressions and variables from GlobalConfig
  */
-public class TemplateResolver {
+public class TemplateResolver implements ITemplateResolver {
     
     private static final Logger logger = LoggerFactory.getLogger(TemplateResolver.class);
     
     private static final Pattern TEMPLATE_PATTERN = Pattern.compile("\\{\\{([^}]+)\\}\\}");
     private static final Pattern PARAM_PATTERN = Pattern.compile("([^:]+):([^:]+)(?::default=(.+))?");
     
-    private final RandomValueGenerator randomValueGenerator;
+    private final IRandomValueGenerator randomValueGenerator;
 
     public TemplateResolver() {
         this.randomValueGenerator = new RandomValueGenerator();
@@ -31,9 +31,14 @@ public class TemplateResolver {
         this.randomValueGenerator = new RandomValueGenerator(random);
     }
 
+    public TemplateResolver(IRandomValueGenerator randomValueGenerator) {
+        this.randomValueGenerator = randomValueGenerator;
+    }
+
     /**
      * Resolve a field value that may contain templates
      */
+    @Override
     public Object resolveValue(String fieldValue, Map<String, Object> vars) {
         if (fieldValue == null || fieldValue.trim().isEmpty()) {
             return "";
@@ -149,6 +154,7 @@ public class TemplateResolver {
     /**
      * Resolve all templates in a map of field values
      */
+    @Override
     public Map<String, Object> resolveAllValues(Map<String, String> fields, Map<String, Object> vars) {
         Map<String, Object> resolvedFields = new java.util.HashMap<>();
         
@@ -163,12 +169,13 @@ public class TemplateResolver {
             }
         }
         
-        return resolvedFields;
+        return java.util.Collections.unmodifiableMap(resolvedFields);
     }
 
     /**
      * Check if a value contains any templates
      */
+    @Override
     public boolean containsTemplates(String value) {
         if (value == null) return false;
         return TEMPLATE_PATTERN.matcher(value).find();
@@ -177,6 +184,7 @@ public class TemplateResolver {
     /**
      * Validate that all required variables exist for the given fields
      */
+    @Override
     public void validateRequiredVariables(Map<String, String> fields, Map<String, Object> vars) {
         for (Map.Entry<String, String> entry : fields.entrySet()) {
             String fieldValue = entry.getValue();
