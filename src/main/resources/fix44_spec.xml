@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<fix major="4" type="FIX" servicepack="0" minor="4">
+    <header>
+        <field name="BeginString" required="Y"/>
+        <field name="BodyLength" required="Y"/>
+        <field name="MsgType" required="Y"/>
+        <field name="MsgSeqNum" required="Y"/>
+        <field name="SenderCompID" required="Y"/>
+        <field name="TargetCompID" required="Y"/>
+        <field name="DeliverToCompID" required="N"/>
+        <field name="TargetSubID" required="N"/>
+        <field name="SenderSubID" required="N"/>
+        <field name="OnBehalfOfCompID" required="N"/>
+        <field name="OnBehalfOfSubID" required="N"/>
+        <field name="SendingTime" required="Y"/>
+    </header>
+
+    <components>
+        <component name="Parties">
+            <group name="NoPartyIDs" required="Y">
+                <field name="PartyID" required="Y"/>
+                <field name="PartyRole" required="Y"/>
+                <group name="NoPartySubIDs" required="N">
+                    <field name="PartySubID" required="N"/>
+                    <field name="PartySubIDType" required="N"/>
+                </group>
+            </group>
+        </component>
+    </components>
+
+    <messages>
+        <message name="NewOrderSingle" msgcat="app" msgtype="D">
+            <field name="ClOrdID" required="Y"/>
+            <field name="Account" required="Y"/>
+            <field name="HandlInst" required="Y"/>
+            <field name="Symbol" required="Y"/>
+            <field name="Side" required="Y"/>
+            <field name="TransactTime" required="Y"/>
+            <field name="OrderQty" required="Y"/>
+            <field name="OrdType" required="Y"/>
+            <field name="TimeInForce" required="Y"/>
+            <field name="SettlDate" required="N"/>
+            <field name="Price" required="N"/>
+            <field name="Currency" required="N"/>
+            <field name="QuoteID" required="Y"/>
+        </message>
+
+        <message name="QuoteRequest" msgcat="app" msgtype="R">
+            <field name="QuoteReqID" required="Y"/>
+            <group name="NoRelatedSym" required="Y">
+                <field name="Symbol" required="Y"/>
+                <field name="QuoteRequestType" required="N"/>
+                <field name="QuoteType" required="N"/>
+                <field name="SettlDate" required="N"/>
+                <field name="Currency" required="N"/>
+            </group>
+            <component name="Parties" required="Y"/>
+        </message>
+
+        <message name="QuoteCancel" msgcat="app" msgtype="Z">
+            <field name="QuoteReqID" required="N"/>
+            <field name="QuoteID" required="Y"/>
+            <field name="QuoteCancelType" required="Y"/>
+            <field name="NoQuoteEntries" required="N"/>
+            <field name="Symbol" required="N"/>
+        </message>
+    </messages>
+
+    <fields>
+        <!-- Header Fields -->
+        <field number="8" name="BeginString" type="STRING" desc="Identifies beginning of FIX message and protocol version"/>
+        <field number="9" name="BodyLength" type="LENGTH" desc="Message length, in bytes, forward to the CheckSum field"/>
+        <field number="35" name="MsgType" type="STRING" desc="Defines message type">
+            <value enum="D" description="NewOrderSingle"/>
+            <value enum="R" description="QuoteRequest"/>
+            <value enum="Z" description="QuoteCancel"/>
+        </field>
+        <field number="34" name="MsgSeqNum" type="SEQNUM" desc="Integer message sequence number"/>
+        <field number="49" name="SenderCompID" type="STRING" desc="Assigned value used to identify firm sending message"/>
+        <field number="56" name="TargetCompID" type="STRING" desc="Assigned value used to identify receiving firm"/>
+        <field number="128" name="DeliverToCompID" type="STRING" desc="Assigned value used to identify the firm targeted to receive the message"/>
+        <field number="57" name="TargetSubID" type="STRING" desc="Assigned value used to identify specific individual or unit intended to receive message"/>
+        <field number="50" name="SenderSubID" type="STRING" desc="Assigned value used to identify specific individual or unit intended to receive message"/>
+        <field number="115" name="OnBehalfOfCompID" type="STRING" desc="Assigned value used to identify the firm which the message is being sent on behalf of"/>
+        <field number="116" name="OnBehalfOfSubID" type="STRING" desc="Assigned value used to identify the specific individual or unit intended to receive the message"/>
+        <field number="52" name="SendingTime" type="UTCTIMESTAMP" desc="Time of message transmission"/>
+
+        <!-- Order Fields -->
+        <field number="11" name="ClOrdID" type="STRING" desc="Unique identifier for Order as assigned by institution"/>
+        <field number="1" name="Account" type="STRING" desc="Account mnemonic as agreed between buy and sell sides"/>
+        <field number="21" name="HandlInst" type="CHAR" desc="Instructions for order handling on Broker trading floor">
+            <value enum="1" description="Automated execution order, private, no Broker intervention"/>
+            <value enum="2" description="Automated execution order, public, Broker intervention OK"/>
+            <value enum="3" description="Manual order, best execution"/>
+        </field>
+        <field number="55" name="Symbol" type="STRING" desc="Ticker symbol"/>
+        <field number="54" name="Side" type="CHAR" desc="Side of order">
+            <value enum="1" description="Buy"/>
+            <value enum="2" description="Sell"/>
+            <value enum="3" description="Buy minus"/>
+            <value enum="4" description="Sell plus"/>
+            <value enum="5" description="Sell short"/>
+            <value enum="6" description="Sell short exempt"/>
+        </field>
+        <field number="60" name="TransactTime" type="UTCTIMESTAMP" desc="Time of execution/order creation"/>
+        <field number="38" name="OrderQty" type="QTY" desc="Quantity ordered"/>
+        <field number="40" name="OrdType" type="CHAR" desc="Order type">
+            <value enum="1" description="Market"/>
+            <value enum="2" description="Limit"/>
+            <value enum="3" description="Stop"/>
+            <value enum="4" description="Stop limit"/>
+            <value enum="5" description="Market on close"/>
+            <value enum="6" description="With or without"/>
+            <value enum="7" description="Limit or better"/>
+            <value enum="8" description="Limit with or without"/>
+            <value enum="9" description="On basis"/>
+        </field>
+        <field number="59" name="TimeInForce" type="CHAR" desc="Specifies how long the order remains in effect">
+            <value enum="0" description="Day"/>
+            <value enum="1" description="Good Till Cancel (GTC)"/>
+            <value enum="2" description="At the Opening (OPG)"/>
+            <value enum="3" description="Immediate or Cancel (IOC)"/>
+            <value enum="4" description="Fill or Kill (FOK)"/>
+            <value enum="5" description="Good Till Crossing (GTX)"/>
+            <value enum="6" description="Good Till Date"/>
+        </field>
+        <field number="64" name="SettlDate" type="LOCALMKTDATE" desc="Date of settlement"/>
+        <field number="44" name="Price" type="PRICE" desc="Price per unit of quantity"/>
+        <field number="15" name="Currency" type="CURRENCY" desc="Identifies currency used for price"/>
+        <field number="117" name="QuoteID" type="STRING" desc="Unique identifier for quote"/>
+
+        <!-- Quote Fields -->
+        <field number="131" name="QuoteReqID" type="STRING" desc="Unique identifier for quote request"/>
+        <field number="146" name="NoRelatedSym" type="NUMINGROUP" desc="Number of related symbols in the group"/>
+        <field number="303" name="QuoteRequestType" type="INT" desc="Indicates the type of Quote Request being generated">
+            <value enum="1" description="Manual"/>
+            <value enum="2" description="Automatic"/>
+        </field>
+        <field number="537" name="QuoteType" type="INT" desc="Identifies the type of quote">
+            <value enum="0" description="Indicative"/>
+            <value enum="1" description="Tradeable"/>
+            <value enum="2" description="Restricted Tradeable"/>
+            <value enum="3" description="Counter"/>
+        </field>
+        <field number="298" name="QuoteCancelType" type="INT" desc="Identifies the type of Quote Cancel">
+            <value enum="1" description="Cancel for Symbol(s)"/>
+            <value enum="2" description="Cancel for Security Type(s)"/>
+            <value enum="3" description="Cancel for Underlying Symbol"/>
+            <value enum="4" description="Cancel All Quotes"/>
+        </field>
+        <field number="295" name="NoQuoteEntries" type="NUMINGROUP" desc="The number of quotes for the quote set"/>
+
+        <!-- Party Fields (MISSING - ADDED) -->
+        <field number="453" name="NoPartyIDs" type="NUMINGROUP" desc="Number of PartyID entries"/>
+        <field number="448" name="PartyID" type="STRING" desc="Party identifier/code"/>
+        <field number="447" name="PartyRole" type="INT" desc="Identifies the type or role of the PartyID specified">
+            <value enum="1" description="Executing Firm"/>
+            <value enum="2" description="Broker of Credit"/>
+            <value enum="3" description="Client ID"/>
+            <value enum="4" description="Clearing Firm"/>
+            <value enum="5" description="Investor ID"/>
+            <value enum="6" description="Introducing Firm"/>
+            <value enum="7" description="Entering Firm"/>
+            <value enum="8" description="Locate/Lending Firm"/>
+            <value enum="9" description="Fund Manager Client ID"/>
+            <value enum="10" description="Settlement Location"/>
+            <value enum="11" description="Order Origination Trader"/>
+            <value enum="12" description="Executing Trader"/>
+            <value enum="13" description="Order Entry Operator ID"/>
+            <value enum="14" description="Primary Account Number"/>
+            <value enum="15" description="Give-up Trading Firm"/>
+            <value enum="16" description="Correspondant Clearing Firm"/>
+            <value enum="17" description="Executing System"/>
+            <value enum="18" description="Contra Firm"/>
+            <value enum="19" description="Contra Clearing Firm"/>
+            <value enum="20" description="Sponsoring Firm"/>
+            <value enum="21" description="Underlying Firm"/>
+        </field>
+        <field number="802" name="NoPartySubIDs" type="NUMINGROUP" desc="Number of PartySubID entries"/>
+        <field number="523" name="PartySubID" type="STRING" desc="Party sub-identifier when PartyID is not specific enough"/>
+        <field number="803" name="PartySubIDType" type="INT" desc="Type of PartySubID value">
+            <value enum="1" description="Firm"/>
+            <value enum="2" description="Person"/>
+            <value enum="3" description="System"/>
+            <value enum="4" description="Application"/>
+            <value enum="5" description="Full legal name of firm"/>
+            <value enum="6" description="Postal address"/>
+            <value enum="7" description="Phone number"/>
+            <value enum="8" description="Email address"/>
+            <value enum="9" description="Contact name"/>
+            <value enum="10" description="Securities account number"/>
+            <value enum="11" description="Registration number"/>
+            <value enum="12" description="Registered address"/>
+            <value enum="13" description="Regulatory status"/>
+            <value enum="14" description="Registration name"/>
+            <value enum="15" description="Cash account number"/>
+            <value enum="16" description="BIC"/>
+            <value enum="17" description="CSD participant/member code"/>
+            <value enum="18" description="Registered address"/>
+            <value enum="19" description="Fund account name"/>
+            <value enum="20" description="Telex number"/>
+            <value enum="21" description="Fax number"/>
+            <value enum="22" description="Securities account name"/>
+            <value enum="23" description="Cash account name"/>
+            <value enum="24" description="Department"/>
+            <value enum="25" description="Location desk"/>
+            <value enum="26" description="Position account type"/>
+        </field>
+
+        <!-- Trailer Fields -->
+        <field number="10" name="CheckSum" type="STRING" desc="Three byte, simple checksum"/>
+    </fields>
+
+    <trailer>
+        <field name="CheckSum" required="Y"/>
+    </trailer>
+</fix>
