@@ -48,3 +48,12 @@ dependencies {
 test {
     useJUnitPlatform()
 }
+
+// Convenience task to run the FIXMessageExtractor demo main
+tasks.register('runExtractor', JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.qa.quick.fix.poc.builder.FIXMessageExtractor'
+    if (project.hasProperty('dict')) {
+        args(project.property('dict'))
+    }
+}

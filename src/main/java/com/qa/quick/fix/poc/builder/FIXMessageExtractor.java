@@ -2,17 +2,24 @@ package com.qa.quick.fix.poc.builder;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.w3c.dom.*;
+import javax.xml.XMLConstants;
 import javax.xml.parsers.*;
 import java.io.*;
 import java.util.*;
 
 public class FIXMessageExtractor {
-    
+
+    private static final Logger log = LoggerFactory.getLogger(FIXMessageExtractor.class);
+    private static final ObjectMapper MAPPER = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
+
     private Document doc;
-    private Map<String, Element> fieldMap = new HashMap<>();
-    private Map<String, Element> componentMap = new HashMap<>();
-    private Map<String, Element> messageMap = new HashMap<>();
+    private final Map<String, Element> fieldMap = new HashMap<>();
+    private final Map<String, Element> componentMap = new HashMap<>();
+    private final Map<String, Element> messageMap = new HashMap<>();
+    private final Map<String, Element> messageByType = new HashMap<>();
     
     /**
      * Load and parse FIX XML specification from file
@@ -26,6 +33,7 @@ public class FIXMessageExtractor {
      */
     public void loadSpecification(File xmlFile) throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        harden(factory);
         DocumentBuilder builder = factory.newDocumentBuilder();
         doc = builder.parse(xmlFile);
         doc.getDocumentElement().normalize();
@@ -38,11 +46,26 @@ public class FIXMessageExtractor {
      */
     public void loadSpecification(InputStream xmlStream) throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        harden(factory);
         DocumentBuilder builder = factory.newDocumentBuilder();
         doc = builder.parse(xmlStream);
         doc.getDocumentElement().normalize();
         
         buildIndexes();
+    }
+
+    private static void harden(DocumentBuilderFactory dbf) throws ParserConfigurationException {
+        // Security hardening against XXE and entity expansion
+        dbf.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        dbf.setFeature("http://xml.org/sax/features/external-general-entities", false);
+        dbf.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+        dbf.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+        dbf.setXIncludeAware(false);
+        dbf.setExpandEntityReferences(false);
+        // Parser behavior preferences
+        dbf.setNamespaceAware(false);
+        dbf.setIgnoringComments(true);
+        dbf.setIgnoringElementContentWhitespace(true);
     }
     
     /**
@@ -90,8 +113,12 @@ public class FIXMessageExtractor {
                 if (node.getNodeType() == Node.ELEMENT_NODE && "message".equals(node.getNodeName())) {
                     Element message = (Element) node;
                     String messageName = message.getAttribute("name");
+                    String msgType = message.getAttribute("msgtype");
                     if (messageName != null && !messageName.isEmpty()) {
                         messageMap.put(messageName, message);
+                    }
+                    if (msgType != null && !msgType.isEmpty()) {
+                        messageByType.put(msgType, message);
                     }
                 }
             }
@@ -108,7 +135,7 @@ public class FIXMessageExtractor {
         
         Element messageElement = messageMap.get(messageName);
         if (messageElement == null) {
-            throw new IllegalArgumentException("Message type '" + messageName + "' not found in specification");
+            throw new FixSpecException("Message name '" + messageName + "' not found in specification");
         }
         
         MessageDefinition msgDef = new MessageDefinition();
@@ -131,9 +158,32 @@ public class FIXMessageExtractor {
      * Convert MessageDefinition to JSON string
      */
     public String toJson(MessageDefinition msgDef) throws Exception {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.enable(SerializationFeature.INDENT_OUTPUT);
-        return mapper.writeValueAsString(msgDef);
+        return MAPPER.writeValueAsString(msgDef);
+    }
+
+    /**
+     * Extract message by FIX MsgType (e.g., "D", "R", etc.)
+     */
+    public MessageDefinition extractMessageByType(String msgType) throws Exception {
+        if (doc == null) {
+            throw new IllegalStateException("No specification loaded. Call loadSpecification() first.");
+        }
+
+        Element messageElement = messageByType.get(msgType);
+        if (messageElement == null) {
+            throw new FixSpecException("Message type '" + msgType + "' not found in specification");
+        }
+
+        String name = messageElement.getAttribute("name");
+        MessageDefinition msgDef = new MessageDefinition();
+        msgDef.setMessageName(name);
+        msgDef.setMessageType(msgType);
+
+        processHeader(msgDef);
+        processMessageBody(messageElement, msgDef);
+        processTrailer(msgDef);
+
+        return msgDef;
     }
     
     /**
@@ -154,8 +204,10 @@ public class FIXMessageExtractor {
                     
                     Element fieldDef = fieldMap.get(fieldName);
                     if (fieldDef != null) {
-                        FieldDefinition field = createFieldDefinition(fieldDef, required);
+                        FieldDefinition field = createFieldDefinition(fieldDef, required, attr(fieldRef, "default"));
                         msgDef.getHeaderFields().add(field);
+                    } else {
+                        log.warn("Unknown header field reference: {}", fieldName);
                     }
                 }
             }
@@ -180,8 +232,10 @@ public class FIXMessageExtractor {
                     
                     Element fieldDef = fieldMap.get(fieldName);
                     if (fieldDef != null) {
-                        FieldDefinition field = createFieldDefinition(fieldDef, required);
+                        FieldDefinition field = createFieldDefinition(fieldDef, required, attr(fieldRef, "default"));
                         msgDef.getTrailerFields().add(field);
+                    } else {
+                        log.warn("Unknown trailer field reference: {}", fieldName);
                     }
                 }
             }
@@ -225,13 +279,15 @@ public class FIXMessageExtractor {
         
         Element fieldDef = fieldMap.get(fieldName);
         if (fieldDef != null) {
-            FieldDefinition field = createFieldDefinition(fieldDef, required);
+            FieldDefinition field = createFieldDefinition(fieldDef, required, attr(fieldRef, "default"));
             
             if (required) {
                 msgDef.getRequiredFields().add(field);
             } else {
                 msgDef.getOptionalFields().add(field);
             }
+        } else {
+            log.warn("Unknown message field reference: {}", fieldName);
         }
     }
     
@@ -246,12 +302,20 @@ public class FIXMessageExtractor {
         group.setName(groupName);
         group.setRequired(required);
         
-        // Get the numInGroup tag number
-        Element numInGroupField = fieldMap.get(groupName);
-        if (numInGroupField != null) {
-            String tagNumber = numInGroupField.getAttribute("number");
-            if (tagNumber != null && !tagNumber.isEmpty()) {
-                group.setNumInGroupTag(Integer.parseInt(tagNumber));
+        // Get the numInGroup tag number (attribute if present, else fallback to field by name)
+        Integer numInGroup = parseInt(attr(groupElement, "numInGroup"));
+        if (numInGroup == null) numInGroup = parseInt(attr(groupElement, "numingroup"));
+        if (numInGroup == null) numInGroup = parseInt(attr(groupElement, "numInGroupTag"));
+        if (numInGroup == null) numInGroup = parseInt(attr(groupElement, "countTag"));
+        if (numInGroup != null) {
+            group.setNumInGroupTag(numInGroup);
+        } else {
+            Element numInGroupField = fieldMap.get(groupName);
+            if (numInGroupField != null) {
+                String tagNumber = numInGroupField.getAttribute("number");
+                if (tagNumber != null && !tagNumber.isEmpty()) {
+                    group.setNumInGroupTag(Integer.parseInt(tagNumber));
+                }
             }
         }
         
@@ -273,8 +337,10 @@ public class FIXMessageExtractor {
                 
                 Element fieldDef = fieldMap.get(fieldName);
                 if (fieldDef != null) {
-                    FieldDefinition field = createFieldDefinition(fieldDef, fieldRequired);
+                    FieldDefinition field = createFieldDefinition(fieldDef, fieldRequired, attr(element, "default"));
                     group.getFields().add(field);
+                } else {
+                    log.warn("Unknown group field reference: {} in group {}", fieldName, groupName);
                 }
             } else if ("group".equals(tagName)) {
                 // Recursively handle nested groups
@@ -293,16 +359,18 @@ public class FIXMessageExtractor {
         ComponentDefinition component = new ComponentDefinition();
         String componentName = componentRef.getAttribute("name");
         boolean required = "Y".equals(componentRef.getAttribute("required"));
-        
+
         component.setName(componentName);
         component.setRequired(required);
-        
+
         // Find the component definition
         Element componentDef = componentMap.get(componentName);
         if (componentDef != null) {
             expandComponent(componentDef, component);
+        } else {
+            log.warn("Unknown component reference: {}", componentName);
         }
-        
+
         return component;
     }
     
@@ -328,19 +396,28 @@ public class FIXMessageExtractor {
                 
                 Element fieldDef = fieldMap.get(fieldName);
                 if (fieldDef != null) {
-                    FieldDefinition field = createFieldDefinition(fieldDef, fieldRequired);
+                    FieldDefinition field = createFieldDefinition(fieldDef, fieldRequired, attr(element, "default"));
                     component.getFields().add(field);
+                } else {
+                    log.warn("Unknown component field reference: {}", fieldName);
                 }
             } else if ("group".equals(tagName)) {
                 // Recursively process groups within components
                 GroupDefinition group = processGroup(element);
                 component.getGroups().add(group);
             } else if ("component".equals(tagName)) {
-                // Handle nested components (recursively expand them)
+                // Handle nested components (preserve structure)
                 String nestedComponentName = element.getAttribute("name");
+                boolean required = "Y".equals(element.getAttribute("required"));
                 Element nestedComponentDef = componentMap.get(nestedComponentName);
                 if (nestedComponentDef != null) {
-                    expandComponent(nestedComponentDef, component);
+                    ComponentDefinition childComponent = new ComponentDefinition();
+                    childComponent.setName(nestedComponentName);
+                    childComponent.setRequired(required);
+                    expandComponent(nestedComponentDef, childComponent);
+                    component.getComponents().add(childComponent);
+                } else {
+                    log.warn("Unknown nested component reference: {}", nestedComponentName);
                 }
             }
         }
@@ -350,6 +427,10 @@ public class FIXMessageExtractor {
      * Create a FieldDefinition from a field element - FIXED to capture all attributes
      */
     private FieldDefinition createFieldDefinition(Element fieldElement, boolean required) {
+        return createFieldDefinition(fieldElement, required, null);
+    }
+
+    private FieldDefinition createFieldDefinition(Element fieldElement, boolean required, String defaultOverride) {
         FieldDefinition field = new FieldDefinition();
         
         field.setName(fieldElement.getAttribute("name"));
@@ -369,8 +450,9 @@ public class FIXMessageExtractor {
         
         // Check for default value attribute
         String defaultValue = fieldElement.getAttribute("default");
-        if (defaultValue != null && !defaultValue.isEmpty()) {
-            field.setDefaultValue(defaultValue);
+        String effectiveDefault = (defaultOverride != null && !defaultOverride.isEmpty()) ? defaultOverride : defaultValue;
+        if (effectiveDefault != null && !effectiveDefault.isEmpty()) {
+            field.setDefaultValue(effectiveDefault);
         }
         
         // Process valid values (enums) - preserve order from XML
@@ -396,15 +478,33 @@ public class FIXMessageExtractor {
         
         return field;
     }
+
+    private static String attr(Element e, String name) {
+        String v = e.getAttribute(name);
+        return (v != null && !v.isEmpty()) ? v : null;
+    }
+
+    private static Integer parseInt(String s) {
+        try {
+            return (s == null || s.isEmpty()) ? null : Integer.parseInt(s);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
     
     /**
      * Main method for testing
      */
     public static void main(String[] args) throws Exception {
+        // Demo usage: load dictionary, extract by name and by type
         FIXMessageExtractor extractor = new FIXMessageExtractor();
-        extractor.loadSpecification("FIX44.xml");
-        MessageDefinition msgDef = extractor.extractMessage("QuoteRequest");
-        String json = extractor.toJson(msgDef);
-        System.out.println(json);
+        String dictPath = args.length > 0 ? args[0] : "FIX44.xml";
+        extractor.loadSpecification(dictPath);
+
+        // Extract by message name
+        MessageDefinition byName = extractor.extractMessage("QuoteRequest");
+        System.out.println("--- QuoteRequest (by name) ---");
+        System.out.println(extractor.toJson(byName));
+
     }
 }

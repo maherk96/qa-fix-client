@@ -53,8 +53,8 @@
                 <field name="QuoteType" required="N"/>
                 <field name="SettlDate" required="N"/>
                 <field name="Currency" required="N"/>
+                <component name="Parties" required="Y"/>
             </group>
-            <component name="Parties" required="Y"/>
         </message>
 
         <message name="QuoteCancel" msgcat="app" msgtype="Z">

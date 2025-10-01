@@ -1,7 +1,3 @@
-// ============================================================================
-// Model Classes for JSON Representation
-// ============================================================================
-
 package com.qa.quick.fix.poc.builder;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -9,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.ArrayList;
 import java.util.List;
 
-@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class MessageDefinition {
     private String messageName;
     private String messageType;
@@ -46,26 +42,3 @@ public class MessageDefinition {
     public void setTrailerFields(List<FieldDefinition> trailerFields) { this.trailerFields = trailerFields; }
 }
 
-
-
-
-
-
-// ============================================================================
-// FIX Specification Parser (FIXED VERSION)
-// ============================================================================
-
-
-// ============================================================================
-// Maven pom.xml dependencies (add to your pom.xml)
-// ============================================================================
-/*
-<dependencies>
-    <!-- Jackson for JSON serialization -->
-    <dependency>
-        <groupId>com.fasterxml.jackson.core</groupId>
-        <artifactId>jackson-databind</artifactId>
-        <version>2.15.2</version>
-    </dependency>
-</dependencies>
-*/
