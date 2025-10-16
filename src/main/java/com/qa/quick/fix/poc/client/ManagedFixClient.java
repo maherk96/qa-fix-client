@@ -33,6 +33,7 @@ import quickfix.field.Username;
 import quickfix.fix44.Logon;
 import quickfix.fix44.Reject;
 
+ 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -59,6 +60,8 @@ public class ManagedFixClient implements Application {
     
     private final MessageListener messageListener;
     private final SessionEventListener sessionEventListener;
+
+    
 
     public ManagedFixClient(String clientStreamName, CommonSettings commonSettings,
                             ClientDefinition clientDefinition, ConnectionEnvironment connectionEnvironment,
@@ -174,7 +177,7 @@ public class ManagedFixClient implements Application {
     @Override
     public void onLogon(SessionID sessionId) {
         logger.info("Session logged on for client {}: {}", clientStreamName, sessionId);
-        
+
         if (sessionId.equals(tradeSessionId)) {
             tradeSessionConnected.set(true);
             connectionLatch.countDown();
@@ -190,7 +193,7 @@ public class ManagedFixClient implements Application {
     @Override
     public void onLogout(SessionID sessionId) {
         logger.info("Session logged out for client {}: {}", clientStreamName, sessionId);
-        
+
         if (sessionId.equals(tradeSessionId)) {
             tradeSessionConnected.set(false);
         } else if (sessionId.equals(quoteSessionId)) {
@@ -245,7 +248,7 @@ public class ManagedFixClient implements Application {
     public void fromApp(Message message, SessionID sessionId) {
         logger.debug("Received app message for client {} from {}: {}", 
                     clientStreamName, sessionId, message.getClass().getSimpleName());
-        
+
         if (messageListener != null) {
             messageListener.onMessage(sessionId, message);
         }
@@ -403,5 +406,5 @@ public class ManagedFixClient implements Application {
             dict.setString(key, value);
         }
     }
-}
 
+}
