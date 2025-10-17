@@ -1,6 +1,6 @@
-package com.qa.quick.fix.cfg; /**
- * Connection environment definition (EMEA, ALGO_UAT, etc.)
- */
+package com.qa.quick.fix.cfg;
+
+/** Connection environment definition (EMEA, ALGO_UAT, etc.) */
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -9,9 +9,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class ConnectionEnvironment {
 
-    @JsonProperty("trade")
-    private ConnectionDetails trade;
+  @JsonProperty("trade")
+  private ConnectionDetails trade;
 
-    @JsonProperty("quote")
-    private ConnectionDetails quote; // Optional for trade-only clients
+  @JsonProperty("quote")
+  private ConnectionDetails quote; // Optional for trade-only clients
 }

@@ -8,55 +8,55 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
-
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 
 public class JsonUtil {
 
-    private static final ObjectMapper MAPPER;
+  private static final ObjectMapper MAPPER;
 
-    static {
-        MAPPER = JsonMapper.builder()
-                .enable(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES)
-                .enable(JsonReadFeature.ALLOW_JAVA_COMMENTS.mappedFeature())
-                .enable(JsonReadFeature.ALLOW_TRAILING_COMMA.mappedFeature())
-                .enable(JsonReadFeature.ALLOW_SINGLE_QUOTES.mappedFeature())
-                .enable(JsonReadFeature.ALLOW_UNQUOTED_FIELD_NAMES.mappedFeature())
-                .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-                .enable(SerializationFeature.INDENT_OUTPUT)
-                .build();
+  static {
+    MAPPER =
+        JsonMapper.builder()
+            .enable(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES)
+            .enable(JsonReadFeature.ALLOW_JAVA_COMMENTS.mappedFeature())
+            .enable(JsonReadFeature.ALLOW_TRAILING_COMMA.mappedFeature())
+            .enable(JsonReadFeature.ALLOW_SINGLE_QUOTES.mappedFeature())
+            .enable(JsonReadFeature.ALLOW_UNQUOTED_FIELD_NAMES.mappedFeature())
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+            .enable(SerializationFeature.INDENT_OUTPUT)
+            .build();
 
-        MAPPER.registerModule(new SimpleModule());
-    }
+    MAPPER.registerModule(new SimpleModule());
+  }
 
-    private JsonUtil() {
-        // Prevent instantiation
-    }
+  private JsonUtil() {
+    // Prevent instantiation
+  }
 
-    /** Reads JSON from a string into the given class type. */
-    public static <T> T read(String json, Class<T> type) throws JsonProcessingException {
-        return MAPPER.readValue(json, type);
-    }
+  /** Reads JSON from a string into the given class type. */
+  public static <T> T read(String json, Class<T> type) throws JsonProcessingException {
+    return MAPPER.readValue(json, type);
+  }
 
-    /** Reads JSON from an InputStream into the given class type. */
-    public static <T> T read(InputStream inputStream, Class<T> type) throws IOException {
-        return MAPPER.readValue(inputStream, type);
-    }
+  /** Reads JSON from an InputStream into the given class type. */
+  public static <T> T read(InputStream inputStream, Class<T> type) throws IOException {
+    return MAPPER.readValue(inputStream, type);
+  }
 
-    /** Reads JSON from a file into the given class type. */
-    public static <T> T read(File file, Class<T> type) throws IOException {
-        return MAPPER.readValue(file, type);
-    }
+  /** Reads JSON from a file into the given class type. */
+  public static <T> T read(File file, Class<T> type) throws IOException {
+    return MAPPER.readValue(file, type);
+  }
 
-    /** Converts an object to a JSON string (pretty printed). */
-    public static String toJson(Object obj) throws JsonProcessingException {
-        return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(obj);
-    }
+  /** Converts an object to a JSON string (pretty printed). */
+  public static String toJson(Object obj) throws JsonProcessingException {
+    return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(obj);
+  }
 
-    /** Returns the shared ObjectMapper instance. */
-    public static ObjectMapper mapper() {
-        return MAPPER;
-    }
+  /** Returns the shared ObjectMapper instance. */
+  public static ObjectMapper mapper() {
+    return MAPPER;
+  }
 }

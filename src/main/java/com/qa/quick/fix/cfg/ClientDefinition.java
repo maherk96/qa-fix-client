@@ -8,12 +8,12 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class ClientDefinition {
 
-    @JsonProperty("tradeSession")
-    private SessionConfig tradeSession;
+  @JsonProperty("tradeSession")
+  private SessionConfig tradeSession;
 
-    @JsonProperty("quoteSession")
-    private SessionConfig quoteSession;
+  @JsonProperty("quoteSession")
+  private SessionConfig quoteSession;
 
-    @JsonProperty("other")
-    private OtherSettings other;
+  @JsonProperty("other")
+  private OtherSettings other;
 }

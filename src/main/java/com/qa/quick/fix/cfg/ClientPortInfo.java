@@ -10,12 +10,12 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ClientPortInfo {
 
-    @JsonProperty("name")
-    private String name;
+  @JsonProperty("name")
+  private String name;
 
-    @JsonProperty("port")
-    private String port;
+  @JsonProperty("port")
+  private String port;
 
-    @JsonProperty("location")
-    private String location;
+  @JsonProperty("location")
+  private String location;
 }

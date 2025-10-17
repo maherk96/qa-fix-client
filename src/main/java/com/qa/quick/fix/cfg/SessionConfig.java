@@ -10,9 +10,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class SessionConfig {
 
-    @JsonProperty("SenderCompID")
-    private String senderCompID;
+  @JsonProperty("SenderCompID")
+  private String senderCompID;
 
-    @JsonProperty("TargetCompID")
-    private String targetCompID;
+  @JsonProperty("TargetCompID")
+  private String targetCompID;
 }
