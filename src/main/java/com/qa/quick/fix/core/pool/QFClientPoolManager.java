@@ -261,9 +261,14 @@ public class QFClientPoolManager {
         return client != null && client.hasQuoteSession();
     }
 
-    public boolean isClientFullyConnected(String clientStreamName) {
+    public boolean isTradeSessionConnected(String clientStreamName) {
         QFConnector client = clientPool.get(clientStreamName);
-        return client != null && client.isConnected();
+        return client != null && client.isTradeSessionConnected();
+    }
+
+    public boolean isQuoteSessionConnected(String clientStreamName) {
+        QFConnector client = clientPool.get(clientStreamName);
+        return client != null && client.isQuoteSessionConnected();
     }
 
     public Set<String> getAvailableClients() {
