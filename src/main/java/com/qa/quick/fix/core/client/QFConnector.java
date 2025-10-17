@@ -66,8 +66,6 @@ public class QFConnector implements Application, AutoCloseable {
     private final QFSessionEventListener qFSessionEventListener;
     private final QFOutboundMessageListener qFOutboundMessageListener;
 
-    private final Map<SessionID, Long> lastHeartbeatTimes = new ConcurrentHashMap<>();
-    private final Map<String, Long> clientConnectionTimes = new ConcurrentHashMap<>();
 
     public QFConnector(
             String clientStreamName,
@@ -192,19 +190,32 @@ public class QFConnector implements Application, AutoCloseable {
         sendMessage(quoteSessionId, message, Channel.QUOTE);
     }
 
-    private enum Channel { TRADE, QUOTE }
+    private enum Channel {
+        TRADE("trade"),
+        QUOTE("quote");
+
+        private final String displayName;
+
+        Channel(String displayName) {
+            this.displayName = displayName;
+        }
+
+        public String displayName() {
+            return displayName;
+        }
+    }
 
     private void sendMessage(SessionID sessionId, Message message, Channel channel) {
         if (sessionId == null) {
             throw new QFSessionException(
-                    (channel == null ? "Session" : channel.name().toLowerCase() + " session") +
+                    (channel == null ? "Session" : channel.displayName() + " session") +
                             " not configured or initialized for client: " + clientStreamName);
         }
 
         Session session = Session.lookupSession(sessionId);
         if (session == null || !session.isLoggedOn()) {
             throw new QFSessionException(
-                    (channel == null ? "Session" : channel.name().toLowerCase() + " session") +
+                    (channel == null ? "Session" : channel.displayName() + " session") +
                             " not connected for client: " + clientStreamName);
         }
 
@@ -212,17 +223,21 @@ public class QFConnector implements Application, AutoCloseable {
             boolean sent = session.send(message);
             if (!sent) {
                 throw new QFSessionException(
-                        "Failed to send message on " + channel.name().toLowerCase() + " for client: " + clientStreamName);
+                        "Failed to send message on " + channel.displayName() + " for client: " + clientStreamName);
             }
-            logger.debug("Sent {} message from client [{}]: {}", channel.name().toLowerCase(), clientStreamName,
+            logger.debug("Sent {} message from client [{}]: {}", channel.displayName(), clientStreamName,
                     message.getClass().getSimpleName());
         } catch (RuntimeException e) {
             throw new QFSessionException(
-                    "Error sending message on " + channel.name().toLowerCase() + " for client: " + clientStreamName, e);
+                    "Error sending message on " + channel.displayName() + " for client: " + clientStreamName, e);
         }
     }
 
     public boolean waitForConnection(long timeout, TimeUnit unit) throws InterruptedException {
+        if (!started.get()) {
+            logger.warn("waitForConnection called before start for client {}", clientStreamName);
+            return false;
+        }
         return connectionLatch.await(timeout, unit);
     }
 
