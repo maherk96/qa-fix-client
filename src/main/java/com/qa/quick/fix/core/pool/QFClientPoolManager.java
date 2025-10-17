@@ -13,6 +13,7 @@ import com.qa.quick.fix.exceptions.QFClientPoolException;
 import com.qa.quick.fix.util.JsonUtil;
 import lombok.extern.slf4j.Slf4j;
 import quickfix.Message;
+import quickfix.ConfigError;
 
 import java.io.File;
 import java.io.IOException;
@@ -135,8 +136,14 @@ public class QFClientPoolManager {
                     clientPool.put(clientStreamName, client);
                     successful.add(clientStreamName);
                     log.info("Started client: {}", clientStreamName);
-                } catch (Exception e) {
-                    log.error("Failed to start client: {}", clientStreamName, e);
+                } catch (ConfigError e) {
+                    log.error("Configuration error starting client {}: {}", clientStreamName, e.getMessage(), e);
+                    failed.put(clientStreamName, e);
+                } catch (QFClientPoolException e) {
+                    log.error("Pool error starting client {}: {}", clientStreamName, e.getMessage(), e);
+                    failed.put(clientStreamName, e);
+                } catch (RuntimeException e) {
+                    log.error("Unexpected error starting client {}: {}", clientStreamName, e.getMessage(), e);
                     failed.put(clientStreamName, e);
                 }
             }
@@ -186,7 +193,7 @@ public class QFClientPoolManager {
                 try {
                     client.stop();
                     log.debug("Stopped client: {}", client.getClientStreamName());
-                } catch (Exception e) {
+                } catch (RuntimeException e) {
                     log.error("Error stopping client {}", client.getClientStreamName(), e);
                 }
             }, scheduler);
@@ -383,7 +390,13 @@ public class QFClientPoolManager {
             }
 
             log.info("Invoking in-place restart on client {}", clientStreamName);
-            boolean connected = client.restartAndAwait(startTimeout, unit);
+            boolean connected;
+            try {
+                connected = client.restartAndAwait(startTimeout, unit);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new QFClientPoolException("Interrupted during restart of client: " + clientStreamName, e);
+            }
 
             if (connected) {
                 log.info("Client {} restarted and connected successfully", clientStreamName);
@@ -393,8 +406,14 @@ public class QFClientPoolManager {
                 return false;
             }
 
-        } catch (Exception e) {
-            log.error("Error during restart of client {}", clientStreamName, e);
+        } catch (QFClientPoolException e) {
+            log.error("Pool error during restart of client {}: {}", clientStreamName, e.getMessage(), e);
+            throw e;
+        } catch (ConfigError e) {
+            log.error("Configuration error during restart of client {}: {}", clientStreamName, e.getMessage(), e);
+            throw new QFClientPoolException("Failed to restart client: " + clientStreamName, e);
+        } catch (RuntimeException e) {
+            log.error("Unexpected error during restart of client {}: {}", clientStreamName, e.getMessage(), e);
             throw new QFClientPoolException("Failed to restart client: " + clientStreamName, e);
         }
     }
@@ -501,7 +520,7 @@ public class QFClientPoolManager {
                     globalQFSessionEventListener,
                     createOutboundMessageListenerWrapper(clientStreamName)
             );
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             throw new QFClientPoolException(
                     "Failed to create client connector for: " + clientStreamName, e);
         }
