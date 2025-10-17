@@ -357,7 +357,7 @@ public class QFClientPoolManager {
         return stopClient(clientStreamName, 30, TimeUnit.SECONDS);
     }
 
-    public boolean restartClient(
+    public synchronized boolean restartClient(
             String clientStreamName, long startTimeout, TimeUnit unit)
             throws QFClientPoolException {
         checkStarted();
