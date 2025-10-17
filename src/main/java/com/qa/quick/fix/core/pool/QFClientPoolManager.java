@@ -305,7 +305,7 @@ public class QFClientPoolManager {
             throws QFClientPoolException {
         checkStarted();
 
-        var client = clientPool.get(clientStreamName);
+        var client = clientPool.remove(clientStreamName);
         if (client == null) {
             log.warn("Cannot stop client – not found: {}", clientStreamName);
             return false;
@@ -325,8 +325,6 @@ public class QFClientPoolManager {
 
         try {
             stopFuture.get(timeout, unit);
-
-            clientPool.remove(clientStreamName);
             clientMessageCounts.get(clientStreamName).set(0);
 
             log.info("Client {} stopped gracefully", clientStreamName);
@@ -343,7 +341,7 @@ public class QFClientPoolManager {
     }
 
     public boolean restartClient(
-            String clientStreamName, long stopTimeout, long startTimeout, TimeUnit unit)
+            String clientStreamName, long startTimeout, TimeUnit unit)
             throws QFClientPoolException {
         checkStarted();
 
@@ -358,10 +356,17 @@ public class QFClientPoolManager {
 
             if (client == null) {
                 log.info("Client {} not running, creating a new instance", clientStreamName);
-                client = createQFClient(clientStreamName);
-                clientPool.put(clientStreamName, client);
+                QFConnector newClient = createQFClient(clientStreamName);
                 log.info("Starting client {} and awaiting connection...", clientStreamName);
-                return client.restartAndAwait(startTimeout, unit);
+                boolean connected = newClient.restartAndAwait(startTimeout, unit);
+                if (connected) {
+                    clientPool.put(clientStreamName, newClient);
+                    log.info("Client {} started and connected; added to pool", clientStreamName);
+                    return true;
+                } else {
+                    log.error("Client {} failed to connect within {} {}. Not adding to pool.", clientStreamName, startTimeout, unit);
+                    return false;
+                }
             }
 
             log.info("Invoking in-place restart on client {}", clientStreamName);
