@@ -36,10 +36,11 @@ import quickfix.field.MsgType;
 import quickfix.field.Password;
 import quickfix.field.Text;
 import quickfix.field.Username;
+import java.time.Duration;
 
 import static com.qa.quick.fix.util.QFUtil.setIfNotNull;
 
-public class QFConnector implements Application {
+public class QFConnector implements Application, AutoCloseable {
 
     private static final Logger logger = LoggerFactory.getLogger(QFConnector.class);
 
@@ -173,23 +174,25 @@ public class QFConnector implements Application {
     }
 
     public void sendTradeMessage(Message message) {
-        sendMessage(tradeSessionId, message, "trade");
+        sendMessage(tradeSessionId, message, Channel.TRADE);
     }
     public void sendQuoteMessage(Message message) {
-        sendMessage(quoteSessionId, message, "quote");
+        sendMessage(quoteSessionId, message, Channel.QUOTE);
     }
 
-    private void sendMessage(SessionID sessionId, Message message, String channel) {
+    private enum Channel { TRADE, QUOTE }
+
+    private void sendMessage(SessionID sessionId, Message message, Channel channel) {
         if (sessionId == null) {
             throw new QFInitializationException(
-                    (channel == null ? "Session" : channel + " session") +
+                    (channel == null ? "Session" : channel.name().toLowerCase() + " session") +
                             " not configured or initialized for client: " + clientStreamName);
         }
 
         Session session = Session.lookupSession(sessionId);
         if (session == null || !session.isLoggedOn()) {
             throw new QFInitializationException(
-                    (channel == null ? "Session" : channel + " session") +
+                    (channel == null ? "Session" : channel.name().toLowerCase() + " session") +
                             " not connected for client: " + clientStreamName);
         }
 
@@ -197,13 +200,13 @@ public class QFConnector implements Application {
             boolean sent = session.send(message);
             if (!sent) {
                 throw new QFInitializationException(
-                        "Failed to send message on " + channel + " for client: " + clientStreamName);
+                        "Failed to send message on " + channel.name().toLowerCase() + " for client: " + clientStreamName);
             }
-            logger.debug("Sent {} message from client [{}]: {}", channel, clientStreamName,
+            logger.debug("Sent {} message from client [{}]: {}", channel.name().toLowerCase(), clientStreamName,
                     message.getClass().getSimpleName());
         } catch (RuntimeException e) {
             throw new QFInitializationException(
-                    "Error sending message on " + channel + " for client: " + clientStreamName, e);
+                    "Error sending message on " + channel.name().toLowerCase() + " for client: " + clientStreamName, e);
         }
     }
 
@@ -220,7 +223,9 @@ public class QFConnector implements Application {
     }
 
     public boolean hasQuoteSession() {
-        return quoteSessionId != null;
+        // Indicate whether a quote session is configured for this client (capability),
+        // not whether it is currently connected.
+        return isQuoteSessionConfigured();
     }
 
     public QFClientStatus getStatus() {
@@ -531,6 +536,20 @@ public class QFConnector implements Application {
         dict.setString("FileLogPath", basePath + "-logs");
 
         return dict;
+    }
+
+    public boolean awaitConnected(Duration timeout) {
+        try {
+            return connectionLatch.await(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    @Override
+    public void close() {
+        stop();
     }
 
 
