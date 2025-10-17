@@ -89,7 +89,7 @@ public class QFConnector implements Application {
     }
 
     public synchronized void start() throws ConfigError {
-        if (started.get()) {
+        if (!started.compareAndSet(false, true)) {
             logger.debug("Start called but already started for client {}", clientStreamName);
             return;
         }
@@ -100,18 +100,32 @@ public class QFConnector implements Application {
                 commonSettings.getTargetCompID()
         );
 
-        SessionSettings settings = createSessionSettings();
-        int sessionsToAwait = (isTradeSessionConfigured() ? 1 : 0) + (isQuoteSessionConfigured() ? 1 : 0);
-        connectionLatch = new CountDownLatch(sessionsToAwait);
-        MessageStoreFactory storeFactory = new MemoryStoreFactory();
-        LogFactory logFactory = new SLF4JLogFactory(settings);
-        MessageFactory messageFactory = new DefaultMessageFactory();
+        try {
+            SessionSettings settings = createSessionSettings();
+            int sessionsToAwait = (isTradeSessionConfigured() ? 1 : 0) + (isQuoteSessionConfigured() ? 1 : 0);
+            connectionLatch = new CountDownLatch(sessionsToAwait);
+            MessageStoreFactory storeFactory = new MemoryStoreFactory();
+            LogFactory logFactory = new SLF4JLogFactory(settings);
+            MessageFactory messageFactory = new DefaultMessageFactory();
 
-        initiator = new SocketInitiator(this, storeFactory, settings, logFactory, messageFactory);
-        initiator.start();
-        started.set(true);
+            initiator = new SocketInitiator(this, storeFactory, settings, logFactory, messageFactory);
+            initiator.start();
 
-        logger.info("Client [{}] initiator started", clientStreamName);
+            logger.info("Client [{}] initiator started", clientStreamName);
+        } catch (RuntimeException | ConfigError e) {
+            // rollback started state and cleanup partially created initiator
+            try {
+                if (initiator != null) {
+                    initiator.stop();
+                }
+            } catch (Exception stopErr) {
+                logger.warn("Rollback stop failed for client {}: {}", clientStreamName, stopErr.getMessage());
+            } finally {
+                initiator = null;
+                started.set(false);
+            }
+            throw e;
+        }
     }
 
     public synchronized void stop() {
@@ -121,18 +135,22 @@ public class QFConnector implements Application {
         }
 
         logger.info("Stopping client: {}", clientStreamName);
-        if (initiator != null) {
-            initiator.stop();
+        try {
+            if (initiator != null) {
+                initiator.stop();
+            }
+        } catch (RuntimeException e) {
+            logger.error("Error stopping initiator for client {}", clientStreamName, e);
+        } finally {
+            tradeSessionConnected.set(false);
+            quoteSessionConnected.set(false);
+            tradeSessionId = null;
+            quoteSessionId = null;
+            initiator = null;
+            // Unblock any waiters
+            connectionLatch = new CountDownLatch(0);
+            started.set(false);
         }
-
-        tradeSessionConnected.set(false);
-        quoteSessionConnected.set(false);
-        tradeSessionId = null;
-        quoteSessionId = null;
-        initiator = null;
-        started.set(false);
-        // Unblock any waiters
-        connectionLatch = new CountDownLatch(0);
     }
 
     /**
