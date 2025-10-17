@@ -158,7 +158,13 @@ public class QFConnector implements Application, AutoCloseable {
      * Restarts the connector synchronously without waiting for connection.
      */
     public synchronized void restart() throws ConfigError {
-        stop();
+        try {
+            stop();
+        } catch (Exception e) {
+            logger.warn("Exception during stop in restart for client {}: {}", clientStreamName, e.getMessage(), e);
+            // Ensure we can proceed to start even if stop signaled an error
+            started.set(false);
+        }
         start();
     }
 
@@ -168,7 +174,13 @@ public class QFConnector implements Application, AutoCloseable {
      */
     public synchronized boolean restartAndAwait(long timeout, TimeUnit unit)
             throws ConfigError, InterruptedException {
-        stop();
+        try {
+            stop();
+        } catch (Exception e) {
+            logger.warn("Exception during stop in restartAndAwait for client {}: {}", clientStreamName, e.getMessage(), e);
+            // Ensure we can proceed to start even if stop signaled an error
+            started.set(false);
+        }
         start();
         return waitForConnection(timeout, unit);
     }
@@ -259,10 +271,10 @@ public class QFConnector implements Application, AutoCloseable {
     public void onLogon(SessionID sessionId) {
         logger.info("Session logged on for client {}: {}", clientStreamName, sessionId);
 
-        if (sessionId.equals(tradeSessionId)) {
+        if (tradeSessionId != null && sessionId.equals(tradeSessionId)) {
             tradeSessionConnected.set(true);
             connectionLatch.countDown();
-        } else if (sessionId.equals(quoteSessionId)) {
+        } else if (quoteSessionId != null && sessionId.equals(quoteSessionId)) {
             quoteSessionConnected.set(true);
             connectionLatch.countDown();
         }
@@ -280,9 +292,9 @@ public class QFConnector implements Application, AutoCloseable {
     public void onLogout(SessionID sessionId) {
         logger.info("Session logged out for client {}: {}", clientStreamName, sessionId);
 
-        if (sessionId.equals(tradeSessionId)) {
+        if (tradeSessionId != null && sessionId.equals(tradeSessionId)) {
             tradeSessionConnected.set(false);
-        } else if (sessionId.equals(quoteSessionId)) {
+        } else if (quoteSessionId != null && sessionId.equals(quoteSessionId)) {
             quoteSessionConnected.set(false);
         }
 
