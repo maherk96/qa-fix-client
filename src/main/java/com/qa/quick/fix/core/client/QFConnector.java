@@ -423,7 +423,6 @@ public class QFConnector implements Application, AutoCloseable {
             );
 
             settings.set(tradeSessionId, tradeDict);
-            this.tradeSessionId = tradeSessionId;
         }
 
         if (clientDefinition.getQuoteSession() != null && connectionEnvironment.getQuote() != null) {
@@ -442,7 +441,6 @@ public class QFConnector implements Application, AutoCloseable {
             );
 
             settings.set(quoteSessionId, quoteDict);
-            this.quoteSessionId = quoteSessionId;
         }
 
         return settings;
