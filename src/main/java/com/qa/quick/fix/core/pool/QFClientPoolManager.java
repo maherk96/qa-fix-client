@@ -357,15 +357,23 @@ public class QFClientPoolManager {
             if (client == null) {
                 log.info("Client {} not running, creating a new instance", clientStreamName);
                 QFConnector newClient = createQFClient(clientStreamName);
-                log.info("Starting client {} and awaiting connection...", clientStreamName);
-                boolean connected = newClient.restartAndAwait(startTimeout, unit);
-                if (connected) {
-                    clientPool.put(clientStreamName, newClient);
-                    log.info("Client {} started and connected; added to pool", clientStreamName);
-                    return true;
-                } else {
-                    log.error("Client {} failed to connect within {} {}. Not adding to pool.", clientStreamName, startTimeout, unit);
-                    return false;
+                // Add to pool before starting to make it discoverable consistently
+                clientPool.put(clientStreamName, newClient);
+                try {
+                    newClient.start();
+                    log.info("Started client {} and awaiting connection...", clientStreamName);
+                    boolean connected = newClient.waitForConnection(startTimeout, unit);
+                    if (connected) {
+                        log.info("Client {} started and connected", clientStreamName);
+                        return true;
+                    } else {
+                        log.error("Client {} failed to connect within {} {}", clientStreamName, startTimeout, unit);
+                        clientPool.remove(clientStreamName);
+                        return false;
+                    }
+                } catch (Exception e) {
+                    clientPool.remove(clientStreamName);
+                    throw new QFClientPoolException("Failed to start new client: " + clientStreamName, e);
                 }
             }
 
