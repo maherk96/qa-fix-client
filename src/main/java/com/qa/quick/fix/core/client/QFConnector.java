@@ -61,6 +61,7 @@ public class QFConnector implements Application, AutoCloseable {
     private final AtomicBoolean started = new AtomicBoolean(false);
 
     private volatile CountDownLatch connectionLatch = new CountDownLatch(0);
+    private volatile int configuredSessionCount = 0;
 
     private final QFInboundMessageListener qFInboundMessageListener;
     private final QFSessionEventListener qFSessionEventListener;
@@ -102,6 +103,7 @@ public class QFConnector implements Application, AutoCloseable {
         try {
             SessionSettings settings = createSessionSettings();
             int sessionsToAwait = (isTradeSessionConfigured() ? 1 : 0) + (isQuoteSessionConfigured() ? 1 : 0);
+            configuredSessionCount = sessionsToAwait;
             connectionLatch = new CountDownLatch(sessionsToAwait);
             MessageStoreFactory storeFactory = new MemoryStoreFactory();
             LogFactory logFactory = new SLF4JLogFactory(settings);
@@ -146,8 +148,11 @@ public class QFConnector implements Application, AutoCloseable {
             tradeSessionId = null;
             quoteSessionId = null;
             initiator = null;
-            // Unblock any waiters
-            connectionLatch = new CountDownLatch(0);
+            // Unblock any threads waiting on the existing latch by draining it to zero
+            for (int i = 0; i < configuredSessionCount; i++) {
+                connectionLatch.countDown();
+            }
+            configuredSessionCount = 0;
             started.set(false);
         }
     }

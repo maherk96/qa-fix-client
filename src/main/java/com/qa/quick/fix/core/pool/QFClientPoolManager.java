@@ -18,6 +18,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -252,7 +253,7 @@ public class QFClientPoolManager {
 
     public boolean isClientConnected(String clientStreamName) {
         QFConnector client = clientPool.get(clientStreamName);
-        return client != null && client.isTradeSessionConnected();
+        return client != null && client.isConnected();
     }
 
     public boolean hasQuoteSession(String clientStreamName) {
@@ -577,17 +578,10 @@ public class QFClientPoolManager {
                                 new QFClientPoolException("Client " + clientName + " not found during connection wait."));
                     }
                     return CompletableFuture.runAsync(() -> {
-                        try {
-                            if (!client.waitForConnection(30, TimeUnit.SECONDS)) {
-                                throw new RuntimeException("Client " + clientName + " failed to connect within timeout (30s)");
-                            }
-                            log.info("Client {} connected successfully", clientName);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            throw new RuntimeException("Interrupted while waiting for client " + clientName + " to connect", e);
-                        } catch (RuntimeException e) {
-                            throw e;
+                        if (!client.awaitConnected(Duration.ofSeconds(30))) {
+                            throw new RuntimeException("Client " + clientName + " failed to connect within timeout (30s)");
                         }
+                        log.info("Client {} connected successfully", clientName);
                     }, scheduler);
                 })
                 .toArray(CompletableFuture[]::new);
