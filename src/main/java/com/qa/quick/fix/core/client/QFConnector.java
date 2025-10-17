@@ -57,6 +57,7 @@ public class QFConnector implements Application {
 
     private final AtomicBoolean tradeSessionConnected = new AtomicBoolean(false);
     private final AtomicBoolean quoteSessionConnected = new AtomicBoolean(false);
+    private final AtomicBoolean started = new AtomicBoolean(false);
 
     private final CountDownLatch connectionLatch = new CountDownLatch(1);
 
@@ -87,7 +88,11 @@ public class QFConnector implements Application {
         this.qFOutboundMessageListener = qFOutboundMessageListener;
     }
 
-    public void start() throws ConfigError {
+    public synchronized void start() throws ConfigError {
+        if (started.get()) {
+            logger.debug("Start called but already started for client {}", clientStreamName);
+            return;
+        }
         logger.info(
                 "Starting client: [{}] [Protocol: {}, TargetCompID: {}]",
                 clientStreamName,
@@ -102,17 +107,28 @@ public class QFConnector implements Application {
 
         initiator = new SocketInitiator(this, storeFactory, settings, logFactory, messageFactory);
         initiator.start();
+        started.set(true);
 
         logger.info("Client [{}] initiator started", clientStreamName);
     }
 
-    public void stop() {
-        if (initiator != null) {
-            logger.info("Stopping client: {}", clientStreamName);
-            initiator.stop();
-            tradeSessionConnected.set(false);
-            quoteSessionConnected.set(false);
+    public synchronized void stop() {
+        if (!started.get()) {
+            logger.debug("Stop called but not started for client {}", clientStreamName);
+            return;
         }
+
+        logger.info("Stopping client: {}", clientStreamName);
+        if (initiator != null) {
+            initiator.stop();
+        }
+
+        tradeSessionConnected.set(false);
+        quoteSessionConnected.set(false);
+        tradeSessionId = null;
+        quoteSessionId = null;
+        initiator = null;
+        started.set(false);
     }
 
     public void sendTradeMessage(Message message) {
