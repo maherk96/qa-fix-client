@@ -4,7 +4,7 @@ import com.qa.quick.fix.cfg.*;
 import com.qa.quick.fix.core.listeners.QFInboundMessageListener;
 import com.qa.quick.fix.core.listeners.QFOutboundMessageListener;
 import com.qa.quick.fix.core.listeners.QFSessionEventListener;
-import com.qa.quick.fix.exceptions.QFInitializationException;
+import com.qa.quick.fix.exceptions.QFSessionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import quickfix.Application;
@@ -184,14 +184,14 @@ public class QFConnector implements Application, AutoCloseable {
 
     private void sendMessage(SessionID sessionId, Message message, Channel channel) {
         if (sessionId == null) {
-            throw new QFInitializationException(
+            throw new QFSessionException(
                     (channel == null ? "Session" : channel.name().toLowerCase() + " session") +
                             " not configured or initialized for client: " + clientStreamName);
         }
 
         Session session = Session.lookupSession(sessionId);
         if (session == null || !session.isLoggedOn()) {
-            throw new QFInitializationException(
+            throw new QFSessionException(
                     (channel == null ? "Session" : channel.name().toLowerCase() + " session") +
                             " not connected for client: " + clientStreamName);
         }
@@ -199,13 +199,13 @@ public class QFConnector implements Application, AutoCloseable {
         try {
             boolean sent = session.send(message);
             if (!sent) {
-                throw new QFInitializationException(
+                throw new QFSessionException(
                         "Failed to send message on " + channel.name().toLowerCase() + " for client: " + clientStreamName);
             }
             logger.debug("Sent {} message from client [{}]: {}", channel.name().toLowerCase(), clientStreamName,
                     message.getClass().getSimpleName());
         } catch (RuntimeException e) {
-            throw new QFInitializationException(
+            throw new QFSessionException(
                     "Error sending message on " + channel.name().toLowerCase() + " for client: " + clientStreamName, e);
         }
     }
