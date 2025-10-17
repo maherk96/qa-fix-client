@@ -301,7 +301,7 @@ public class QFClientPoolManager {
         this.globalQFSessionEventListener = listener;
     }
 
-    public boolean stopClient(String clientStreamName, long timeout, TimeUnit unit)
+    public synchronized boolean stopClient(String clientStreamName, long timeout, TimeUnit unit)
             throws QFClientPoolException {
         checkStarted();
 
