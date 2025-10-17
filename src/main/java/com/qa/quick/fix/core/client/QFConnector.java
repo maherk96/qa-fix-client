@@ -59,7 +59,7 @@ public class QFConnector implements Application {
     private final AtomicBoolean quoteSessionConnected = new AtomicBoolean(false);
     private final AtomicBoolean started = new AtomicBoolean(false);
 
-    private final CountDownLatch connectionLatch = new CountDownLatch(1);
+    private volatile CountDownLatch connectionLatch = new CountDownLatch(0);
 
     private final QFInboundMessageListener qFInboundMessageListener;
     private final QFSessionEventListener qFSessionEventListener;
@@ -101,6 +101,8 @@ public class QFConnector implements Application {
         );
 
         SessionSettings settings = createSessionSettings();
+        int sessionsToAwait = (isTradeSessionConfigured() ? 1 : 0) + (isQuoteSessionConfigured() ? 1 : 0);
+        connectionLatch = new CountDownLatch(sessionsToAwait);
         MessageStoreFactory storeFactory = new MemoryStoreFactory();
         LogFactory logFactory = new SLF4JLogFactory(settings);
         MessageFactory messageFactory = new DefaultMessageFactory();
@@ -223,6 +225,7 @@ public class QFConnector implements Application {
             connectionLatch.countDown();
         } else if (sessionId.equals(quoteSessionId)) {
             quoteSessionConnected.set(true);
+            connectionLatch.countDown();
         }
 
         if (qFSessionEventListener != null) {
