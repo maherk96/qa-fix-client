@@ -337,7 +337,12 @@ public class QFClientPoolManager {
 
         try {
             stopFuture.get(timeout, unit);
-            clientMessageCounts.get(clientStreamName).set(0);
+            var count = clientMessageCounts.get(clientStreamName);
+            if (count != null) {
+                count.set(0);
+            } else {
+                log.warn("No message count found for client {} during stop", clientStreamName);
+            }
 
             log.info("Client {} stopped gracefully", clientStreamName);
             return true;
