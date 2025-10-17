@@ -173,42 +173,37 @@ public class QFConnector implements Application {
     }
 
     public void sendTradeMessage(Message message) {
-        if (tradeSessionId == null || !tradeSessionConnected.get()) {
+        sendMessage(tradeSessionId, message, "trade");
+    }
+    public void sendQuoteMessage(Message message) {
+        sendMessage(quoteSessionId, message, "quote");
+    }
+
+    private void sendMessage(SessionID sessionId, Message message, String channel) {
+        if (sessionId == null) {
             throw new QFInitializationException(
-                    "Trade session not connected for client: " + clientStreamName
-            );
+                    (channel == null ? "Session" : channel + " session") +
+                            " not configured or initialized for client: " + clientStreamName);
+        }
+
+        Session session = Session.lookupSession(sessionId);
+        if (session == null || !session.isLoggedOn()) {
+            throw new QFInitializationException(
+                    (channel == null ? "Session" : channel + " session") +
+                            " not connected for client: " + clientStreamName);
         }
 
         try {
-            Session.sendToTarget(message, tradeSessionId);
-            logger.debug(
-                    "Sent trade message from client [{}]: {}",
-                    clientStreamName,
-                    message.getClass().getSimpleName()
-            );
-        } catch (SessionNotFound e) {
+            boolean sent = session.send(message);
+            if (!sent) {
+                throw new QFInitializationException(
+                        "Failed to send message on " + channel + " for client: " + clientStreamName);
+            }
+            logger.debug("Sent {} message from client [{}]: {}", channel, clientStreamName,
+                    message.getClass().getSimpleName());
+        } catch (RuntimeException e) {
             throw new QFInitializationException(
-                    "Trade session not found for client: " + clientStreamName, e
-            );
-        }
-    }
-    public void sendQuoteMessage(Message message) {
-        if (quoteSessionId == null || !quoteSessionConnected.get()) {
-            throw new QFInitializationException(
-                    "Quote session not available for client: " + clientStreamName
-            );
-        }
-        try {
-            Session.sendToTarget(message, quoteSessionId);
-            logger.debug(
-                    "Sent quote message from client {}: {}",
-                    clientStreamName,
-                    message.getClass().getSimpleName()
-            );
-        } catch (SessionNotFound e) {
-            throw new QFInitializationException(
-                    "Quote session not found for client: " + clientStreamName, e
-            );
+                    "Error sending message on " + channel + " for client: " + clientStreamName, e);
         }
     }
 
@@ -268,7 +263,11 @@ public class QFConnector implements Application {
         }
 
         if (qFSessionEventListener != null) {
-            qFSessionEventListener.onLogon(sessionId);
+            try {
+                qFSessionEventListener.onLogon(sessionId);
+            } catch (Exception ex) {
+                logger.error("SessionEventListener.onLogon threw for client {}: {}", clientStreamName, ex.getMessage(), ex);
+            }
         }
     }
 
@@ -283,7 +282,11 @@ public class QFConnector implements Application {
         }
 
         if (qFSessionEventListener != null) {
-            qFSessionEventListener.onLogout(sessionId);
+            try {
+                qFSessionEventListener.onLogout(sessionId);
+            } catch (Exception ex) {
+                logger.error("SessionEventListener.onLogout threw for client {}: {}", clientStreamName, ex.getMessage(), ex);
+            }
         }
     }
 
@@ -346,7 +349,11 @@ public class QFConnector implements Application {
                 );
 
                 if (qFSessionEventListener != null) {
-                    qFSessionEventListener.onReject(sessionId, reason);
+                    try {
+                        qFSessionEventListener.onReject(sessionId, reason);
+                    } catch (Exception ex) {
+                        logger.error("SessionEventListener.onReject threw for client {}: {}", clientStreamName, ex.getMessage(), ex);
+                    }
                 }
             }
         } catch (FieldNotFound e) {
@@ -366,7 +373,11 @@ public class QFConnector implements Application {
         logger.debug("MSG_OUT: {} -> {}", sessionId, message);
 
         if (qFOutboundMessageListener != null) {
-            qFOutboundMessageListener.onOutgoingMessage(sessionId, message);
+            try {
+                qFOutboundMessageListener.onOutgoingMessage(sessionId, message);
+            } catch (Exception ex) {
+                logger.error("OutboundMessageListener threw for client {}: {}", clientStreamName, ex.getMessage(), ex);
+            }
         }
     }
 
@@ -380,7 +391,11 @@ public class QFConnector implements Application {
         );
 
         if (qFInboundMessageListener != null) {
-            qFInboundMessageListener.onMessage(sessionId, message);
+            try {
+                qFInboundMessageListener.onMessage(sessionId, message);
+            } catch (Exception ex) {
+                logger.error("InboundMessageListener threw for client {}: {}", clientStreamName, ex.getMessage(), ex);
+            }
         }
     }
 
