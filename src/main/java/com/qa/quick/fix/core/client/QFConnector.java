@@ -460,19 +460,21 @@ public class QFConnector implements Application, AutoCloseable {
     }
 
     public boolean isConnected() {
-        if (isTradeSessionConfigured()) {
-            if (!isTradeSessionConnected()) {
-                return false;
-            }
+        // At least one session must be configured
+        if (!isTradeSessionConfigured() && !isQuoteSessionConfigured()) {
+            return false;
         }
 
-        if (isQuoteSessionConfigured()) {
-            if (!isQuoteSessionConnected()) {
-                return false;
-            }
+        // All configured sessions must be connected
+        if (isTradeSessionConfigured() && !isTradeSessionConnected()) {
+            return false;
         }
 
-        return isTradeSessionConfigured() || isQuoteSessionConfigured();
+        if (isQuoteSessionConfigured() && !isQuoteSessionConnected()) {
+            return false;
+        }
+
+        return true;
     }
 
     private boolean isTradeSessionConfigured() {
