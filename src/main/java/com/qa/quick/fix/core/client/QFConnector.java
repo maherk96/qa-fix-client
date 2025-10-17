@@ -131,6 +131,27 @@ public class QFConnector implements Application {
         quoteSessionId = null;
         initiator = null;
         started.set(false);
+        // Unblock any waiters
+        connectionLatch = new CountDownLatch(0);
+    }
+
+    /**
+     * Restarts the connector synchronously without waiting for connection.
+     */
+    public synchronized void restart() throws ConfigError {
+        stop();
+        start();
+    }
+
+    /**
+     * Restarts the connector and waits for all configured sessions to connect.
+     * @return true if all configured sessions connected within the timeout; false otherwise
+     */
+    public synchronized boolean restartAndAwait(long timeout, TimeUnit unit)
+            throws ConfigError, InterruptedException {
+        stop();
+        start();
+        return waitForConnection(timeout, unit);
     }
 
     public void sendTradeMessage(Message message) {

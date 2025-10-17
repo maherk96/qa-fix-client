@@ -344,7 +344,6 @@ public class QFClientPoolManager {
     public boolean restartClient(
             String clientStreamName, long stopTimeout, long startTimeout, TimeUnit unit)
             throws QFClientPoolException {
-
         checkStarted();
 
         if (!clientStreamNames.contains(clientStreamName)) {
@@ -354,53 +353,29 @@ public class QFClientPoolManager {
         log.info("Restarting client: {}", clientStreamName);
 
         try {
-            var existingClient = clientPool.get(clientStreamName);
-            if (existingClient != null) {
-                log.info("Stopping existing client: {}", clientStreamName);
-                if (!stopClient(clientStreamName, stopTimeout, unit)) {
-                    log.error("Failed to stop existing client {}, aborting restart", clientStreamName);
-                    return false;
-                }
+            QFConnector client = clientPool.get(clientStreamName);
+
+            if (client == null) {
+                log.info("Client {} not running, creating a new instance", clientStreamName);
+                client = createQFClient(clientStreamName);
+                clientPool.put(clientStreamName, client);
+                log.info("Starting client {} and awaiting connection...", clientStreamName);
+                return client.restartAndAwait(startTimeout, unit);
             }
 
-            log.info("Creating new client instance: {}", clientStreamName);
-            var newClient = createQFClient(clientStreamName);
-
-            log.info("Starting new client: {}", clientStreamName);
-            newClient.start();
-
-            clientPool.put(clientStreamName, newClient);
-
-            log.info("Waiting for client {} to connect...", clientStreamName);
-            CompletableFuture<Boolean> connectionFuture = CompletableFuture.supplyAsync(() -> {
-                try {
-                    return newClient.waitForConnection(startTimeout, unit);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new RuntimeException("Interrupted waiting for connection", e);
-                }
-            });
-
-            boolean connected = connectionFuture.get(startTimeout + 5, unit);
+            log.info("Invoking in-place restart on client {}", clientStreamName);
+            boolean connected = client.restartAndAwait(startTimeout, unit);
 
             if (connected) {
                 log.info("Client {} restarted and connected successfully", clientStreamName);
                 return true;
             } else {
-                log.error("Client {} failed to connect after restart", clientStreamName);
-                stopClient(clientStreamName, 10, TimeUnit.SECONDS);
+                log.error("Client {} failed to connect after restart within {} {}", clientStreamName, startTimeout, unit);
                 return false;
             }
 
         } catch (Exception e) {
             log.error("Error during restart of client {}", clientStreamName, e);
-
-            try {
-                stopClient(clientStreamName, 5, TimeUnit.SECONDS);
-            } catch (Exception cleanup) {
-                log.error("Error during cleanup after failed restart", cleanup);
-            }
-
             throw new QFClientPoolException("Failed to restart client: " + clientStreamName, e);
         }
     }
