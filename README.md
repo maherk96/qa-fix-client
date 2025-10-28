@@ -1,189 +1,174 @@
 # QA FIX Client
 
-A small, thread‑safe QuickFIX/J client pool for starting, monitoring, and sending messages across one or more FIX initiator sessions. It supports dual‑session clients (trade and quote), round‑robin routing, lifecycle management, and simple health/stats queries.
+Lightweight QuickFIX/J client components for managing one or two FIX sessions (trade and/or quote) per client stream. This project provides:
+
+- A robust connector (`QFConnector`) that encapsulates QuickFIX/J `Application`, session lifecycle, connection waiting, and message sending.
+- Configuration model classes (`cfg/*`) to build sessions and environment at runtime without .cfg files.
+- Optional listener interfaces to observe inbound/outbound app messages and session events.
+- Tests and a tiny in‑JVM test acceptor to validate connectivity and behaviors.
+
+This repo targets Java 17+ and QuickFIX/J 2.3.x.
 
 ## Features
-- Multiple clients in a pool, each with trade and/or quote sessions
-- Start, stop, restart (idempotent, synchronized)
-- Await connection for all configured sessions
-- Per‑client and global listeners (inbound, outbound, session events)
-- Send to a specific client or round‑robin across connected clients
-- Connection/status snapshots and basic statistics
-- Two configuration modes for ports:
-  - Inline `SocketConnectPort` in the main config
-  - Separate `ports.json` mapping by `SenderCompID`
 
-## Requirements
-- Java 17+ (tested with Java 21)
-- Gradle 8+
+- Two-session support (trade and quote) per client stream
+- Idempotent, thread-safe lifecycle: `start()`, `stop()`, `restart()`, `restartAndAwait(...)`
+- Connection await helpers via timeout or `Duration`
+- Safe message sending with session state validation and rich errors
+- Optional `PortsConfiguration` to override connection ports per sender (e.g., local dev)
+- Optional listeners for inbound, outbound, and session events
+- SLF4J logging (Logback included for tests/dev)
 
-## Getting Started
+## Project Layout
 
-### 1) Add a configuration JSON (class path or file)
+- `src/main/java/com/qa/quick/fix/cfg`: configuration POJOs
+  - `CommonSettings`, `ClientDefinition`, `SessionConfig`, `ConnectionEnvironment`, `ConnectionDetails`, `OtherSettings`, `PortsConfiguration`, `ClientPortInfo`
+- `src/main/java/com/qa/quick/fix/core/client`: connector and status
+  - `QFConnector`, `QFClientStatus`
+- `src/main/java/com/qa/quick/fix/core/listeners`: listener interfaces
+  - `QFInboundMessageListener`, `QFOutboundMessageListener`, `QFSessionEventListener`
+- `src/test/java/com/qa/quick/fix`: integration/unit tests and an in‑JVM acceptor
+  - `TestFixAcceptor` (embedded QuickFIX/J acceptor used by tests)
+  - `QFConnectorLifecycleIT`, `QFConnectorConnectionStatusIT`
+  - Added: `QFConnectorCallbacksTest`, `QFConnectorSendAndAwaitIT`
 
-Main config (`demo-trade-only.json` example):
-```
-{
-  "common": {
-    "ConnectionType": "initiator",
-    "ReconnectInterval": "1",
-    "FileStorePath": "store",
-    "StartTime": "00:00:00",
-    "EndTime": "00:00:00",
-    "UseDataDictionary": "N",
-    "BeginString": "FIX.4.4",
-    "HeartBtInt": "30",
-    "TargetCompID": "SERVER"
-  },
-  "connections": {
-    "LOCAL": {
-      "trade": {
-        "SocketConnectHost": "127.0.0.1",
-        "SocketConnectPort": "9876"  // Option A: inline port
-      }
-    }
-  },
-  "clients": {
-    "CLIENT1": {
-      "tradeSession": {
-        "SenderCompID": "CLIENT1",
-        "TargetCompID": "SERVER"
-      }
-    }
-  }
-}
-```
+## Build, Test, Coverage
 
-Dual‑session example (`demo-trade-quote.json`):
-```
-{
-  "common": { "ConnectionType": "initiator", "BeginString": "FIX.4.4", "HeartBtInt": "30", "StartTime": "00:00:00", "EndTime": "00:00:00", "FileStorePath": "store" },
-  "connections": {
-    "TEST": {
-      "trade": { "SocketConnectHost": "localhost" },
-      "quote": { "SocketConnectHost": "localhost" }
-    }
-  },
-  "clients": {
-    "trap_client": {
-      "tradeSession": { "SenderCompID": "TRAP-A-001-TRADE" },
-      "quoteSession": { "SenderCompID": "TRAP-A-001-QUOTE" }
-    }
-  }
-}
-```
+- Build and test
+  - `./gradlew clean test`
+- Generate coverage report
+  - `./gradlew jacocoTestReport`
+  - Open `build/reports/jacoco/test/html/index.html`
+- Enforce coverage (bundle-wide): `./gradlew check`
+  - Configured in `build.gradle` to require 80% instruction coverage at the bundle level
+  - If you want to relax this for local development, comment or adjust the `jacocoTestCoverageVerification` rule
 
-Optional `ports.json` (Option B: external ports by `SenderCompID`):
-```
-{
-  "clients": [
-    { "name": "TRAP-A-001-QUOTE", "port": "36112", "location": "TEST" },
-    { "name": "TRAP-A-001-TRADE", "port": "46112", "location": "TEST" }
-  ]
-}
-```
-How ports are resolved:
-- If `ports.json` is provided and a `clients[].name` matches the session `SenderCompID`, that port is used.
-- Otherwise, if `SocketConnectPort` exists in the main config, it is used.
+## Quick Start: Creating a Connector
 
-### 2) Start a pool from JSON files
-```
-Set<String> clients = Set.of("CLIENT1", "CLIENT2");
-QFClientPoolManager pool = new QFClientPoolManager(
-    "demo-trade-only.json",   // classpath or file path
-    "ports.json",             // optional (null if inlined ports)
-    "LOCAL",                  // environment key from config
-    clients
-);
+Example: trade-only connector with a local acceptor.
 
-// Start and wait for connections
-pool.startAll();
-
-// Send to a specific client
-pool.sendTradeMessage("CLIENT1", new quickfix.fix44.Heartbeat());
-
-// Or round‑robin across all connected trade clients
-pool.sendTradeMessage(new quickfix.fix44.Heartbeat());
-
-// Query status and stats
-boolean connected = pool.isClientConnected("CLIENT1");
-PoolStatistics stats = pool.getStatistics();
-
-// Restart a client
-pool.restartClient("CLIENT1", 10, TimeUnit.SECONDS);
-
-// Stop one or all
-pool.stopClient("CLIENT2", 10, TimeUnit.SECONDS);
-pool.stopAll();
-```
-
-### 3) Or build configuration programmatically
-```
+```java
 CommonSettings common = new CommonSettings();
-common.setConnectionType("initiator");
 common.setBeginString("FIX.4.4");
+common.setTargetCompID("SERVER");
+common.setConnectionType("initiator");
+common.setReconnectInterval("5");
 common.setHeartBtInt("30");
 common.setStartTime("00:00:00");
 common.setEndTime("00:00:00");
-common.setFileStorePath("build/qf-store");
+common.setUseDataDictionary("N");
+common.setSlf4jLogHeartbeats("N");
+common.setFileStorePath("target/data/client");
 
-ConnectionEnvironment env = new ConnectionEnvironment();
-env.setTrade(new ConnectionDetails("127.0.0.1", "9876"));
+SessionConfig trade = new SessionConfig();
+trade.setSenderCompID("CLIENT_T");
+trade.setTargetCompID("SERVER");
 
 ClientDefinition def = new ClientDefinition();
-def.setTradeSession(new SessionConfig("CLIENT1", "SERVER"));
+def.setTradeSession(trade);
 
-FixClientConfiguration cfg = new FixClientConfiguration();
-cfg.setCommon(common);
-cfg.setConnections(Map.of("LOCAL", env));
-cfg.setClients(Map.of("CLIENT1", def));
+ConnectionDetails details = new ConnectionDetails();
+details.setSocketConnectHost("localhost");
+details.setSocketConnectPort("9876");
 
-QFClientPoolManager pool = new QFClientPoolManager(cfg, "LOCAL", Set.of("CLIENT1"));
-pool.startAll();
+ConnectionEnvironment env = new ConnectionEnvironment();
+env.setTrade(details);
+
+QFConnector connector = new QFConnector(
+    "CLIENT_STREAM",
+    common,
+    def,
+    env,
+    /* portsConfig */ null,
+    /* inbound */ null,
+    /* session events */ null,
+    /* outbound */ null);
+
+connector.start();
+boolean connected = connector.waitForConnection(10, TimeUnit.SECONDS);
+if (!connected) throw new IllegalStateException("Not connected in time");
+
+// Send an app message after logon
+Message app = new Message();
+app.getHeader().setString(MsgType.FIELD, MsgType.NEWS);
+connector.sendTradeMessage(app);
+
+connector.stop();
 ```
+
+## Session Types and Status
+
+- Trade session: configured by `ClientDefinition.tradeSession` + `ConnectionEnvironment.trade`
+- Quote session: configured by `ClientDefinition.quoteSession` + `ConnectionEnvironment.quote`
+- A connector can manage zero, one, or two sessions; `isConnected()` returns true only when all configured sessions are logged on
+- Snapshot: `QFClientStatus` exposes stream name, connection booleans, and current `SessionID`s
 
 ## Listeners
-Set global listeners on the pool before starting to observe traffic and events:
+
+- `QFInboundMessageListener.onMessage(sessionId, message)` — inbound app messages
+- `QFOutboundMessageListener.onOutgoingMessage(sessionId, message)` — outbound app messages
+- `QFSessionEventListener.onLogon/onLogout/onReject` — session lifecycle and admin rejects
+- Listener exceptions are caught and logged; they won’t disrupt the connector
+
+## Admin Logon Enrichment
+
+If `ClientDefinition.other` is provided, `QFConnector.toAdmin(...)` enriches LOGON messages with:
+
+- Username (553), Password (554)
+- DefaultApplVerID (1137), DefaultCstmApplVerID (1408)
+- SenderSubID (50), TargetSubID (57)
+
+Values are applied only when present and non-empty in `OtherSettings`.
+
+## Port Overrides (Local Dev)
+
+`PortsConfiguration` can override the `SocketConnectPort` per senderCompId. This is useful for targeting local services without changing upstream config.
+
+```java
+PortsConfiguration ports = new PortsConfiguration();
+ports.setClients(List.of(new ClientPortInfo("CLIENT_T", "9876", null)));
+
+// Pass the ports into QFConnector constructor; it will prefer the override
 ```
-pool.setGlobalMessageListener((sessionId, msg) -> { /* inbound app msgs */ });
-pool.setGlobalOutboundMessageListener((sessionId, msg) -> { /* outbound app msgs */ });
-pool.setGlobalSessionEventListener(new QFSessionEventListener() {
-  public void onLogon(SessionID id) { /* logon */ }
-  public void onLogout(SessionID id) { /* logout */ }
-  public void onReject(SessionID id, String reason) { /* admin reject */ }
-});
-```
-Listener exceptions are caught and logged so they don’t break FIX engine threads.
 
-## Connection Semantics
-- A client is “connected” only when all configured sessions (trade and/or quote) are logged on.
-- `QFConnector.awaitConnected(Duration)` and `waitForConnection(timeout, unit)` complete when all configured sessions log on.
-- `hasQuoteSession()` indicates capability (configured), not connection state.
+## Utilities & Tasks
 
-## Exceptions
-- `QFSessionException`: runtime session state issues (e.g., sending when not logged on).
-- `QFInitializationException`: initialization failures in earlier flows.
-- `QFClientPoolException`: pool‑level failures (bad config, lifecycle misuse, etc.).
+- Spotless formatting: `./gradlew spotlessApply`
+- Demo tasks (if present in your classpath):
+  - `runExtractor` — runs `com.qa.quick.fix.poc.builder.FIXMessageExtractor` (pass `-Pdict=FIX44.xml` to point a dictionary)
+  - `runRepro` — runs `com.qa.quick.fix.poc.demo.ReproMain`
 
-## Thread‑Safety
-- Connector start/stop/restart are synchronized and idempotent.
-- `sendTradeMessage` / `sendQuoteMessage` resolve the current `Session` atomically and check `isLoggedOn()`.
-- Pool `stopClient` and `restartClient` are synchronized; stop removes the client from the pool before shutdown begins.
+## Testing
 
-## Building and Testing
-- Run tests: `./gradlew test`
-- Coverage (JaCoCo): `build/reports/jacoco/test/html/index.html` (80% minimum enforced)
+- Integration tests spin up an in‑JVM acceptor (`TestFixAcceptor`) to validate logon/logouts and application messaging.
+- Additional tests cover:
+  - Lifecycle and connection waits
+  - Connection status reporting across session configurations
+  - Admin/app callbacks and listener behavior
+  - Message send success and error paths
+  - `PortsConfiguration` overrides
 
-Integration tests spin up in‑process acceptors for round‑trip verification:
-- `QFClientPoolManagerIT` (single trade client)
-- `QFClientPoolManagerDualIT` (dual trade+quote client)
-- `QFClientPoolManagerMultiIT` (3 trade clients; uses ports mapping)
+View coverage for the client package at:
 
-## Troubleshooting
-- Ensure `StartTime` and `EndTime` are set in `common` (QuickFIX/J schedule requires them).
-- `SenderCompID` in the client session must match the one you map in `ports.json`.
-- If you inline `SocketConnectPort`, you can omit `ports.json`.
-- Check logs for QuickFIX/J categories configured in `common` (SLF4J/Logback included).
+- `build/reports/jacoco/test/html/com.qa.quick.fix.core.client/index.html`
 
-## License
-This project uses QuickFIX/J under its respective license. No additional license is specified for this codebase.
+## Thread-safety & Lifecycle Notes
+
+- Lifecycle methods (`start/stop/restart/restartAndAwait`) are synchronized and idempotent.
+- Connection waiting uses a resettable `CountDownLatch` sized to configured sessions; drained on stop to unblock waiters.
+- Message sending validates session existence and logon state and throws `QFSessionException` with a clear reason if it cannot send.
+
+## Logging
+
+- Uses SLF4J (Logback in dev/test). Configure logback via a standard `logback.xml` on the classpath for your environment.
+
+## Requirements
+
+- Java 17+
+- Gradle wrapper included
+- QuickFIX/J 2.3.x dependencies are declared in `build.gradle`
+
+## Contributing
+
+- Keep changes focused and small. Add or update tests for new behavior.
+- Run `./gradlew spotlessApply test jacocoTestReport` before opening a PR.
