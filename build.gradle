@@ -1,5 +1,14 @@
 plugins {
     id 'java'
+    id 'com.diffplug.spotless' version '6.25.0'
+    id 'jacoco'
+}
+
+spotless {
+    java {
+        googleJavaFormat('1.17.0')
+        target 'src/**/*.java'
+    }
 }
 
 group = 'org.example'
@@ -48,6 +57,37 @@ dependencies {
 test {
     useJUnitPlatform()
 }
+
+jacoco {
+    toolVersion = '0.8.10'
+}
+
+tasks.test {
+    finalizedBy tasks.jacocoTestReport
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit {
+                counter = 'INSTRUCTION'
+                value = 'COVEREDRATIO'
+                minimum = 0.10
+            }
+        }
+    }
+}
+
+check.dependsOn jacocoTestCoverageVerification
 
 // Convenience task to run the FIXMessageExtractor demo main
 tasks.register('runExtractor', JavaExec) {
