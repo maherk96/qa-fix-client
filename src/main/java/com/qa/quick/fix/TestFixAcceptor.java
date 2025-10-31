@@ -32,17 +32,17 @@ public class TestFixAcceptor implements Application, AutoCloseable {
   private boolean autoRespondToQuotes = true;
 
   /**
-   * Creates a test acceptor with the given session and port.
-   * Auto-responds to orders and quotes by default.
+   * Creates a test acceptor with the given session and port. Auto-responds to orders and quotes by
+   * default.
    */
   public TestFixAcceptor(SessionID sessionID, int port) throws ConfigError {
     this(sessionID, port, true, true);
   }
 
-  /**
-   * Creates a test acceptor with configurable auto-response behavior.
-   */
-  public TestFixAcceptor(SessionID sessionID, int port, boolean autoRespondToOrders, boolean autoRespondToQuotes) throws ConfigError {
+  /** Creates a test acceptor with configurable auto-response behavior. */
+  public TestFixAcceptor(
+      SessionID sessionID, int port, boolean autoRespondToOrders, boolean autoRespondToQuotes)
+      throws ConfigError {
     this.autoRespondToOrders = autoRespondToOrders;
     this.autoRespondToQuotes = autoRespondToQuotes;
     SessionSettings settings = createSettings(sessionID, port);
@@ -202,9 +202,7 @@ public class TestFixAcceptor implements Application, AutoCloseable {
     }
   }
 
-  /**
-   * Handles New Order Single by sending Pending New -> New execution reports
-   */
+  /** Handles New Order Single by sending Pending New -> New execution reports */
   private void handleNewOrderSingle(Message order, SessionID sessionId) {
     try {
       String clOrdID = order.getString(ClOrdID.FIELD);
@@ -225,10 +223,21 @@ public class TestFixAcceptor implements Application, AutoCloseable {
       String execID2 = "EXEC" + System.currentTimeMillis() + "_2";
 
       // Send Pending New (OrdStatus = A)
-      Message pendingNew = createExecutionReport(
-              orderID, execID1, clOrdID, symbol, side, orderQty, ordType, price,
-              ExecType.PENDING_NEW, OrdStatus.PENDING_NEW, 0, 0, orderQty
-      );
+      Message pendingNew =
+          createExecutionReport(
+              orderID,
+              execID1,
+              clOrdID,
+              symbol,
+              side,
+              orderQty,
+              ordType,
+              price,
+              ExecType.PENDING_NEW,
+              OrdStatus.PENDING_NEW,
+              0,
+              0,
+              orderQty);
       sendMessage(sessionId, pendingNew);
       log.info("Test acceptor: Sent Pending New for ClOrdID: {}", clOrdID);
 
@@ -236,10 +245,21 @@ public class TestFixAcceptor implements Application, AutoCloseable {
       Thread.sleep(50);
 
       // Send New (OrdStatus = 0)
-      Message newOrder = createExecutionReport(
-              orderID, execID2, clOrdID, symbol, side, orderQty, ordType, price,
-              ExecType.NEW, OrdStatus.NEW, 0, 0, orderQty
-      );
+      Message newOrder =
+          createExecutionReport(
+              orderID,
+              execID2,
+              clOrdID,
+              symbol,
+              side,
+              orderQty,
+              ordType,
+              price,
+              ExecType.NEW,
+              OrdStatus.NEW,
+              0,
+              0,
+              orderQty);
       sendMessage(sessionId, newOrder);
       log.info("Test acceptor: Sent New for ClOrdID: {}", clOrdID);
 
@@ -248,9 +268,7 @@ public class TestFixAcceptor implements Application, AutoCloseable {
     }
   }
 
-  /**
-   * Handles Quote Request by sending a Quote response
-   */
+  /** Handles Quote Request by sending a Quote response */
   private void handleQuoteRequest(Message quoteRequest, SessionID sessionId) {
     try {
       String quoteReqID = quoteRequest.getString(QuoteReqID.FIELD);
@@ -278,9 +296,7 @@ public class TestFixAcceptor implements Application, AutoCloseable {
     }
   }
 
-  /**
-   * Handles Quote submission by sending a Quote Acknowledgement
-   */
+  /** Handles Quote submission by sending a Quote Acknowledgement */
   private void handleQuote(Message quote, SessionID sessionId) {
     try {
       String quoteID = quote.getString(QuoteID.FIELD);
@@ -301,13 +317,21 @@ public class TestFixAcceptor implements Application, AutoCloseable {
     }
   }
 
-  /**
-   * Creates an execution report message
-   */
+  /** Creates an execution report message */
   private Message createExecutionReport(
-          String orderID, String execID, String clOrdID, String symbol,
-          char side, double orderQty, char ordType, Double price,
-          char execType, char ordStatus, double cumQty, double lastQty, double leavesQty) {
+      String orderID,
+      String execID,
+      String clOrdID,
+      String symbol,
+      char side,
+      double orderQty,
+      char ordType,
+      Double price,
+      char execType,
+      char ordStatus,
+      double cumQty,
+      double lastQty,
+      double leavesQty) {
 
     Message execReport = new Message();
     execReport.getHeader().setString(MsgType.FIELD, MsgType.EXECUTION_REPORT);
@@ -342,8 +366,7 @@ public class TestFixAcceptor implements Application, AutoCloseable {
   }
 
   /**
-   * Main method to run the acceptor as a standalone server.
-   * Supports both QUOTE and TRADE sessions.
+   * Main method to run the acceptor as a standalone server. Supports both QUOTE and TRADE sessions.
    * Press Ctrl+C to stop.
    */
   public static void main(String[] args) {
@@ -352,19 +375,21 @@ public class TestFixAcceptor implements Application, AutoCloseable {
 
     try {
       // Configure QUOTE session - TRAP-A-001-QUOTE
-      SessionID quoteSessionID = new SessionID(
-              "FIX.4.4",                // FIX version (from config BeginString)
-              "EPAM",                   // SenderCompID (TargetCompID from client perspective)
-              "TRAP-A-001-QUOTE"        // TargetCompID (SenderCompID from client perspective)
-      );
+      SessionID quoteSessionID =
+          new SessionID(
+              "FIX.4.4", // FIX version (from config BeginString)
+              "EPAM", // SenderCompID (TargetCompID from client perspective)
+              "TRAP-A-001-QUOTE" // TargetCompID (SenderCompID from client perspective)
+              );
       int quotePort = 36112;
 
       // Configure TRADE session - TRAP-A-001-TRADE
-      SessionID tradeSessionID = new SessionID(
-              "FIX.4.4",                // FIX version
-              "EPAM",                   // SenderCompID
-              "TRAP-A-001-TRADE"        // TargetCompID
-      );
+      SessionID tradeSessionID =
+          new SessionID(
+              "FIX.4.4", // FIX version
+              "EPAM", // SenderCompID
+              "TRAP-A-001-TRADE" // TargetCompID
+              );
       int tradePort = 46112;
 
       log.info("=================================================");
@@ -394,18 +419,21 @@ public class TestFixAcceptor implements Application, AutoCloseable {
       final TestFixAcceptor finalTradeAcceptor = tradeAcceptor;
 
       // Add shutdown hook for graceful shutdown
-      Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-        log.info("Shutdown signal received, stopping acceptors...");
-        if (finalQuoteAcceptor != null) {
-          finalQuoteAcceptor.close();
-          log.info("QUOTE acceptor stopped");
-        }
-        if (finalTradeAcceptor != null) {
-          finalTradeAcceptor.close();
-          log.info("TRADE acceptor stopped");
-        }
-        log.info("All acceptors stopped");
-      }));
+      Runtime.getRuntime()
+          .addShutdownHook(
+              new Thread(
+                  () -> {
+                    log.info("Shutdown signal received, stopping acceptors...");
+                    if (finalQuoteAcceptor != null) {
+                      finalQuoteAcceptor.close();
+                      log.info("QUOTE acceptor stopped");
+                    }
+                    if (finalTradeAcceptor != null) {
+                      finalTradeAcceptor.close();
+                      log.info("TRADE acceptor stopped");
+                    }
+                    log.info("All acceptors stopped");
+                  }));
 
       // Keep the main thread alive
       Thread.currentThread().join();

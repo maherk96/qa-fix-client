@@ -4,15 +4,15 @@ plugins {
     id 'jacoco'
 }
 
+group = 'com.qa.quick.fix'
+version = '1.0-SNAPSHOT'
+
 spotless {
     java {
         googleJavaFormat('1.17.0')
         target 'src/**/*.java'
     }
 }
-
-group = 'org.example'
-version = '1.0-SNAPSHOT'
 
 repositories {
     mavenCentral()
