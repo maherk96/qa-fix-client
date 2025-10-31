@@ -281,7 +281,8 @@ public class QFConnector implements Application, AutoCloseable {
   private void sendMessage(SessionID sessionId, Message message, Channel channel) {
     if (sessionId == null) {
       throw new QFSessionException(
-              channel.displayName() + " session"
+          channel.displayName()
+              + " session"
               + " not configured or initialized for client: "
               + clientStreamName);
     }
@@ -289,9 +290,7 @@ public class QFConnector implements Application, AutoCloseable {
     Session session = Session.lookupSession(sessionId);
     if (session == null || !session.isLoggedOn()) {
       throw new QFSessionException(
-              channel.displayName() + " session"
-              + " not connected for client: "
-              + clientStreamName);
+          channel.displayName() + " session" + " not connected for client: " + clientStreamName);
     }
 
     try {

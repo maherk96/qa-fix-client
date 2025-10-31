@@ -1,20 +1,19 @@
 package com.qa.quick.fix;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.qa.quick.fix.cfg.*;
 import com.qa.quick.fix.core.client.QFConnector;
 import com.qa.quick.fix.exceptions.QFSessionException;
+import java.time.Duration;
+import java.util.Collections;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.*;
 import quickfix.ConfigError;
 import quickfix.Message;
 import quickfix.SessionID;
 import quickfix.field.MsgType;
-
-import java.time.Duration;
-import java.util.Collections;
-import java.util.concurrent.TimeUnit;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @Tag("send")
@@ -69,7 +68,10 @@ class QFConnectorSendAndAwaitIT {
   @AfterEach
   void cleanup() {
     if (connector != null) {
-      try { connector.close(); } catch (Exception ignored) {}
+      try {
+        connector.close();
+      } catch (Exception ignored) {
+      }
     }
     if (acceptor != null) {
       acceptor.stop();
@@ -146,13 +148,15 @@ class QFConnectorSendAndAwaitIT {
   @Order(5)
   @DisplayName("PortsConfiguration overrides ConnectionDetails port")
   void portsConfiguration_overridesPort() throws Exception {
-    // Run acceptor on TRADE_PORT; feed wrong port in ConnectionDetails but correct in PortsConfiguration
+    // Run acceptor on TRADE_PORT; feed wrong port in ConnectionDetails but correct in
+    // PortsConfiguration
     PortsConfiguration ports = new PortsConfiguration();
-    ports.setClients(Collections.singletonList(new ClientPortInfo(CLIENT + "_TRADE", String.valueOf(TRADE_PORT), null)));
+    ports.setClients(
+        Collections.singletonList(
+            new ClientPortInfo(CLIENT + "_TRADE", String.valueOf(TRADE_PORT), null)));
 
     connector = tradeOnlyConnector(19998, ports); // wrong port in ConnectionDetails
     connector.start();
     assertThat(connector.waitForConnection(10, TimeUnit.SECONDS)).isTrue();
   }
 }
-

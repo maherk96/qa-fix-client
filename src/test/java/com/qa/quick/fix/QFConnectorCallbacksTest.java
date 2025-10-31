@@ -1,5 +1,11 @@
 package com.qa.quick.fix;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
+
 import com.qa.quick.fix.cfg.ClientDefinition;
 import com.qa.quick.fix.cfg.CommonSettings;
 import com.qa.quick.fix.cfg.ConnectionEnvironment;
@@ -23,12 +29,6 @@ import quickfix.field.MsgType;
 import quickfix.field.Password;
 import quickfix.field.Text;
 import quickfix.field.Username;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("QFConnector admin/app callbacks and listener behavior")
@@ -87,15 +87,9 @@ class QFConnectorCallbacksTest {
     def.setTradeSession(trade);
     def.setOther(other);
 
-    QFConnector connector = new QFConnector(
-        "CALLBACKS",
-        common,
-        def,
-        new ConnectionEnvironment(),
-        null,
-        null,
-        null,
-        null);
+    QFConnector connector =
+        new QFConnector(
+            "CALLBACKS", common, def, new ConnectionEnvironment(), null, null, null, null);
 
     Message logon = new Message();
     logon.getHeader().setString(MsgType.FIELD, MsgType.LOGON);
@@ -140,20 +134,24 @@ class QFConnectorCallbacksTest {
     Message msg = new Message(); // no MsgType in header
     SessionID sid = new SessionID("FIX.4.4", "SENDER", "TARGET");
 
-    assertThatThrownBy(() -> connector.fromAdmin(msg, sid))
-        .isInstanceOf(FieldNotFound.class);
+    assertThatThrownBy(() -> connector.fromAdmin(msg, sid)).isInstanceOf(FieldNotFound.class);
   }
 
   @Test
   @DisplayName("toApp and fromApp invoke listeners and swallow exceptions")
   void toApp_fromApp_invokeListeners_andSwallowExceptions(
-      @Mock QFInboundMessageListener inbound,
-      @Mock QFOutboundMessageListener outbound) {
-    QFSessionEventListener sessionListener = new QFSessionEventListener() {
-      @Override public void onLogon(SessionID sessionId) {}
-      @Override public void onLogout(SessionID sessionId) {}
-      @Override public void onReject(SessionID sessionId, String reason) {}
-    };
+      @Mock QFInboundMessageListener inbound, @Mock QFOutboundMessageListener outbound) {
+    QFSessionEventListener sessionListener =
+        new QFSessionEventListener() {
+          @Override
+          public void onLogon(SessionID sessionId) {}
+
+          @Override
+          public void onLogout(SessionID sessionId) {}
+
+          @Override
+          public void onReject(SessionID sessionId, String reason) {}
+        };
 
     QFConnector connector = newConnector(inbound, sessionListener, outbound);
     SessionID sid = new SessionID("FIX.4.4", "S", "T");
@@ -174,4 +172,3 @@ class QFConnectorCallbacksTest {
     assertDoesNotThrow(() -> connector.fromApp(appMsg, sid));
   }
 }
-
