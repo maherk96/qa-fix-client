@@ -34,6 +34,11 @@ import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
 import quickfix.ConfigError;
 import quickfix.Message;
+import quickfix.SessionNotFound;
+import quickfix.field.TradSesReqID;
+import quickfix.field.TradingSessionID;
+import quickfix.fix44.TradingSessionStatusRequest;
+import java.util.UUID;
 
 /**
  * Manages a pool of QuickFIX/J client connectors, one per client stream name. This is the
@@ -60,6 +65,9 @@ public class QFClientPoolManager {
   private QFInboundMessageListener globalQFInboundMessageListener;
   private QFSessionEventListener globalQFSessionEventListener;
   private QFOutboundMessageListener globalQFOutboundMessageListener;
+
+  private boolean sendTradingSessionStatusOnLogon = false;
+  private boolean periodicHealthLoggingEnabled = false;
 
   private final AtomicLong messagesSent = new AtomicLong(0);
   private final AtomicLong messagesReceived = new AtomicLong(0);
@@ -401,6 +409,34 @@ public class QFClientPoolManager {
   }
 
   /**
+   * Opts in to automatically sending a FIX 4.4 TradingSessionStatusRequest (35=g) immediately
+   * after each session logon. Defaults to {@code false}; callers that do not invoke this method
+   * see no behaviour change.
+   *
+   * @param enabled {@code true} to send the request on logon; {@code false} to disable
+   * @return this instance for fluent chaining
+   */
+  public QFClientPoolManager withTradingSessionStatusOnLogon(boolean enabled) {
+    this.sendTradingSessionStatusOnLogon = enabled;
+    return this;
+  }
+
+  /**
+   * Opts in to periodic pool health logging on the existing scheduler. A single INFO line is
+   * emitted every {@code interval} {@code unit}s (first emission is delayed by the same interval).
+   * Callers that do not invoke this method see zero behaviour change.
+   *
+   * @param interval how often to log
+   * @param unit time unit for the interval
+   * @return this instance for fluent chaining
+   */
+  public QFClientPoolManager withPeriodicHealthLogging(long interval, TimeUnit unit) {
+    this.periodicHealthLoggingEnabled = true;
+    scheduler.scheduleAtFixedRate(this::logPoolHealth, interval, interval, unit);
+    return this;
+  }
+
+  /**
    * Stops a single client. The client is atomically removed from the pool before shutdown begins to
    * prevent new lookups, then its connector is stopped asynchronously and this method waits up to
    * the timeout for completion.
@@ -647,7 +683,7 @@ public class QFClientPoolManager {
           connEnv,
           portsConfig,
           createInboundMessageListenerWrapper(clientStreamName),
-          globalQFSessionEventListener,
+          wrapWithTradingSessionStatus(globalQFSessionEventListener, clientStreamName),
           createOutboundMessageListenerWrapper(clientStreamName));
     } catch (RuntimeException e) {
       throw new QFClientPoolException(
@@ -676,6 +712,76 @@ public class QFClientPoolManager {
       messagesSent.incrementAndGet();
       clientMessageCounts.get(clientStreamName).incrementAndGet();
       globalQFOutboundMessageListener.onOutgoingMessage(sessionId, message);
+    };
+  }
+
+  private void logPoolHealth() {
+    if (!periodicHealthLoggingEnabled || !isStarted()) {
+      return;
+    }
+    try {
+      PoolStatistics stats = getStatistics();
+      log.info(
+          "[PoolHealth] environment={} total={} connected={} sent={} received={}"
+              + " clientStatuses={} perClientMsgCounts={}",
+          environmentName,
+          stats.getTotalClients(),
+          stats.getConnectedClients(),
+          stats.getTotalMessagesSent(),
+          stats.getTotalMessagesReceived(),
+          getAllClientStatuses(),
+          stats.getClientMessageCounts());
+    } catch (Exception e) {
+      log.warn("Periodic health log failed: {}", e.getMessage());
+    }
+  }
+
+  private TradingSessionStatusRequest buildTradingSessionStatusRequest(
+      quickfix.SessionID sessionId) {
+    TradingSessionStatusRequest request = new TradingSessionStatusRequest();
+    request.set(new TradSesReqID(UUID.randomUUID().toString()));
+    request.set(
+        new TradingSessionID(
+            sessionId.getSenderCompID() + "->" + sessionId.getTargetCompID()));
+    return request;
+  }
+
+  private QFSessionEventListener wrapWithTradingSessionStatus(
+      QFSessionEventListener delegate, String clientStreamName) {
+    return new QFSessionEventListener() {
+      @Override
+      public void onLogon(quickfix.SessionID sessionId) {
+        if (delegate != null) {
+          delegate.onLogon(sessionId);
+        }
+        if (sendTradingSessionStatusOnLogon) {
+          try {
+            TradingSessionStatusRequest request = buildTradingSessionStatusRequest(sessionId);
+            quickfix.Session.sendToTarget(request, sessionId);
+            log.info(
+                "Sent TradingSessionStatusRequest on logon for client {}", clientStreamName);
+          } catch (SessionNotFound e) {
+            log.warn(
+                "Could not send TradingSessionStatusRequest for client {}: session not found",
+                clientStreamName,
+                e);
+          }
+        }
+      }
+
+      @Override
+      public void onLogout(quickfix.SessionID sessionId) {
+        if (delegate != null) {
+          delegate.onLogout(sessionId);
+        }
+      }
+
+      @Override
+      public void onReject(quickfix.SessionID sessionId, String reason) {
+        if (delegate != null) {
+          delegate.onReject(sessionId, reason);
+        }
+      }
     };
   }
 
