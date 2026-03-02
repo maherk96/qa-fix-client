@@ -1,0 +1,57 @@
+plugins {
+    id 'java-library'
+}
+
+group   = 'com.marketdatahub'
+version = '1.0.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    lombokVersion  = '1.18.30'
+    slf4jVersion   = '2.0.9'
+    logbackVersion = '1.4.14'
+    junitVersion   = '5.10.1'
+    mockitoVersion = '5.8.0'
+}
+
+dependencies {
+    // Lombok — annotation processor only, not on runtime classpath
+    compileOnly         "org.projectlombok:lombok:${lombokVersion}"
+    annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+    testCompileOnly         "org.projectlombok:lombok:${lombokVersion}"
+    testAnnotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+
+    // SLF4J API
+    api "org.slf4j:slf4j-api:${slf4jVersion}"
+
+    // Logback (runtime binding)
+    runtimeOnly "ch.qos.logback:logback-classic:${logbackVersion}"
+
+    // JUnit 5
+    testImplementation "org.junit.jupiter:junit-jupiter:${junitVersion}"
+
+    // Mockito
+    testImplementation "org.mockito:mockito-core:${mockitoVersion}"
+    testImplementation "org.mockito:mockito-junit-jupiter:${mockitoVersion}"
+}
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        showStandardStreams = false
+        exceptionFormat    = 'full'
+    }
+}
+
+compileJava.options.encoding   = 'UTF-8'
+compileTestJava.options.encoding = 'UTF-8'
