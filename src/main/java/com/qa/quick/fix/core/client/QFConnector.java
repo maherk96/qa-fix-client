@@ -5,6 +5,7 @@ import static com.qa.quick.fix.util.QFUtil.setIfNotNull;
 import com.qa.quick.fix.cfg.*;
 import com.qa.quick.fix.core.listeners.QFInboundMessageListener;
 import com.qa.quick.fix.core.listeners.QFOutboundMessageListener;
+import com.qa.quick.fix.core.listeners.QFRawInboundMessageListener;
 import com.qa.quick.fix.core.listeners.QFSessionEventListener;
 import com.qa.quick.fix.exceptions.QFSessionException;
 import java.time.Duration;
@@ -25,7 +26,6 @@ import quickfix.MemoryStoreFactory;
 import quickfix.Message;
 import quickfix.MessageFactory;
 import quickfix.MessageStoreFactory;
-import quickfix.SLF4JLogFactory;
 import quickfix.Session;
 import quickfix.SessionID;
 import quickfix.SessionSettings;
@@ -76,6 +76,7 @@ public class QFConnector implements Application, AutoCloseable {
   private final QFInboundMessageListener qFInboundMessageListener;
   private final QFSessionEventListener qFSessionEventListener;
   private final QFOutboundMessageListener qFOutboundMessageListener;
+  private final QFRawInboundMessageListener qFRawInboundMessageListener;
 
   public QFConnector(
       String clientStreamName,
@@ -86,6 +87,28 @@ public class QFConnector implements Application, AutoCloseable {
       QFInboundMessageListener qFInboundMessageListener,
       QFSessionEventListener qFSessionEventListener,
       QFOutboundMessageListener qFOutboundMessageListener) {
+    this(
+        clientStreamName,
+        commonSettings,
+        clientDefinition,
+        connectionEnvironment,
+        portsConfig,
+        qFInboundMessageListener,
+        qFSessionEventListener,
+        qFOutboundMessageListener,
+        null);
+  }
+
+  public QFConnector(
+      String clientStreamName,
+      CommonSettings commonSettings,
+      ClientDefinition clientDefinition,
+      ConnectionEnvironment connectionEnvironment,
+      PortsConfiguration portsConfig,
+      QFInboundMessageListener qFInboundMessageListener,
+      QFSessionEventListener qFSessionEventListener,
+      QFOutboundMessageListener qFOutboundMessageListener,
+      QFRawInboundMessageListener qFRawInboundMessageListener) {
 
     this.clientStreamName = clientStreamName;
     this.commonSettings = commonSettings;
@@ -95,6 +118,7 @@ public class QFConnector implements Application, AutoCloseable {
     this.qFInboundMessageListener = qFInboundMessageListener;
     this.qFSessionEventListener = qFSessionEventListener;
     this.qFOutboundMessageListener = qFOutboundMessageListener;
+    this.qFRawInboundMessageListener = qFRawInboundMessageListener;
   }
 
   /**
@@ -122,7 +146,7 @@ public class QFConnector implements Application, AutoCloseable {
       configuredSessionCount = sessionsToAwait;
       connectionLatch = new CountDownLatch(sessionsToAwait);
       MessageStoreFactory storeFactory = new MemoryStoreFactory();
-      LogFactory logFactory = new SLF4JLogFactory(settings);
+      LogFactory logFactory = new RawMessageCapturingLogFactory(settings);
       MessageFactory messageFactory = new DefaultMessageFactory();
 
       initiator = new SocketInitiator(this, storeFactory, settings, logFactory, messageFactory);
@@ -530,6 +554,20 @@ public class QFConnector implements Application, AutoCloseable {
         clientStreamName,
         sessionId,
         message.getClass().getSimpleName());
+
+    String rawMessage = RawMessageCapturingLogFactory.takeRawIncoming(sessionId);
+
+    if (qFRawInboundMessageListener != null && rawMessage != null) {
+      try {
+        qFRawInboundMessageListener.onRawMessage(sessionId, rawMessage);
+      } catch (Exception ex) {
+        logger.error(
+            "RawInboundMessageListener threw for client {}: {}",
+            clientStreamName,
+            ex.getMessage(),
+            ex);
+      }
+    }
 
     if (qFInboundMessageListener != null) {
       try {

@@ -8,6 +8,7 @@ import com.qa.quick.fix.core.client.QFClientStatus;
 import com.qa.quick.fix.core.client.QFConnector;
 import com.qa.quick.fix.core.listeners.QFInboundMessageListener;
 import com.qa.quick.fix.core.listeners.QFOutboundMessageListener;
+import com.qa.quick.fix.core.listeners.QFRawInboundMessageListener;
 import com.qa.quick.fix.core.listeners.QFSessionEventListener;
 import com.qa.quick.fix.exceptions.QFClientPoolException;
 import com.qa.quick.fix.util.JsonUtil;
@@ -60,6 +61,7 @@ public class QFClientPoolManager {
   private QFInboundMessageListener globalQFInboundMessageListener;
   private QFSessionEventListener globalQFSessionEventListener;
   private QFOutboundMessageListener globalQFOutboundMessageListener;
+  private QFRawInboundMessageListener globalQFRawInboundMessageListener;
 
   private final AtomicLong messagesSent = new AtomicLong(0);
   private final AtomicLong messagesReceived = new AtomicLong(0);
@@ -401,6 +403,18 @@ public class QFClientPoolManager {
   }
 
   /**
+   * Sets a global raw inbound message listener applied to all clients created by this pool.
+   *
+   * <p>Use this to receive the complete, unparsed FIX wire string for every incoming application
+   * message. This is the correct approach when the server sends non-standard repeating groups
+   * without a group-count tag, since QuickFIX/J's parser will otherwise discard the duplicate
+   * field occurrences before {@link QFInboundMessageListener#onMessage} is called.
+   */
+  public void setGlobalRawMessageListener(QFRawInboundMessageListener listener) {
+    this.globalQFRawInboundMessageListener = listener;
+  }
+
+  /**
    * Stops a single client. The client is atomically removed from the pool before shutdown begins to
    * prevent new lookups, then its connector is stopped asynchronously and this method waits up to
    * the timeout for completion.
@@ -648,7 +662,8 @@ public class QFClientPoolManager {
           portsConfig,
           createInboundMessageListenerWrapper(clientStreamName),
           globalQFSessionEventListener,
-          createOutboundMessageListenerWrapper(clientStreamName));
+          createOutboundMessageListenerWrapper(clientStreamName),
+          createRawInboundMessageListenerWrapper(clientStreamName));
     } catch (RuntimeException e) {
       throw new QFClientPoolException(
           "Failed to create client connector for: " + clientStreamName, e);
@@ -665,6 +680,15 @@ public class QFClientPoolManager {
       clientMessageCounts.get(clientStreamName).incrementAndGet();
       globalQFInboundMessageListener.onMessage(sessionId, message);
     };
+  }
+
+  private QFRawInboundMessageListener createRawInboundMessageListenerWrapper(
+      String clientStreamName) {
+    if (globalQFRawInboundMessageListener == null) {
+      return null;
+    }
+    return (sessionId, rawMessage) ->
+        globalQFRawInboundMessageListener.onRawMessage(sessionId, rawMessage);
   }
 
   private QFOutboundMessageListener createOutboundMessageListenerWrapper(String clientStreamName) {
